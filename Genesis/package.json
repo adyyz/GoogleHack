@@ -1,0 +1,40 @@
+{
+  "name": "aml-insight-genesis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Evidence-first AML investigation prototype",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test:browser": "node scripts/check-browser.cjs",
+    "browser:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-browser.ps1",
+    "api": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m uvicorn backend.api:app --host 127.0.0.1 --port 8080",
+    "seed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m backend.seed",
+    "test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m pytest -q",
+    "test:integration": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1 emulators:exec --only auth,firestore --project demo-aml-insight \"powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m pytest tests/test_integration.py -q\"",
+    "doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1",
+    "python:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-python.ps1",
+    "python:sync": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-python.ps1",
+    "mcp:check": "node scripts/check-mcp.cjs",
+    "firebase": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1",
+    "firebase:mcp": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1 mcp --dir . --only auth,firestore",
+    "gcloud": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/gcloud.ps1",
+    "emulators": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1 emulators:start --only auth,firestore --project demo-aml-insight",
+    "emulators:check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1 emulators:exec --only auth,firestore --project demo-aml-insight \"node scripts/check-emulators.cjs\""
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "firebase-tools": "15.34.0",
+    "typescript": "5.9.3",
+    "vite": "6.4.4"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}

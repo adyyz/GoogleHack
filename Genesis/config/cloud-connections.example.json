@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "environment": "cloud-target-not-connected",
+  "project_id": "genesis-aicb",
+  "project_number": "638299117256",
+  "funding_status": "UNVERIFIED",
+  "secret_store": {
+    "provider": "google-secret-manager",
+    "status": "NOT_PROVISIONED",
+    "naming_prefix": "genesis-",
+    "smoke_test_secret": "genesis-vault-smoke-test",
+    "secret_values": "NEVER_STORE_IN_THIS_FILE"
+  },
+  "connections": {
+    "gemini": { "auth": "application-default-credentials", "secret_required": false, "status": "NOT_CONNECTED" },
+    "firestore": { "auth": "application-default-credentials", "secret_required": false, "status": "LOCAL_EMULATOR_ONLY" },
+    "cloud_tasks": { "auth": "application-default-credentials-and-oidc", "secret_required": false, "status": "NOT_CONNECTED" },
+    "firebase_auth": { "auth": "firebase-user-id-token", "secret_required": false, "status": "LOCAL_EMULATOR_ONLY" },
+    "gemini_developer_api_optional": { "enabled": false, "secret_required": true, "secret_id_if_adopted": "genesis-gemini-api-key", "status": "NOT_SELECTED" }
+  },
+  "notes": [
+    "Non-secret inventory only; not loaded by the application.",
+    "No credentials, tokens, passwords, private keys, or secret payloads belong here.",
+    "One Google Cloud secret store covers external keys; a separate Gemini vault is not needed.",
+    "Local application settings remain unchanged."
+  ]
+}

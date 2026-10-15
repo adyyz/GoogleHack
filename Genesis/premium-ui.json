@@ -1,0 +1,10 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["frontend"],
+  "locale": "en-AU",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": ["Form", "Scrollbar"],
+  "commands": { "build": "npm run build", "browser": "npm run test:browser", "design": "node scripts/check-design.cjs" },
+  "requiredCommands": ["build", "browser", "design"],
+  "evidence": { "failurePaths": "scripts/check-browser.cjs" }
+}

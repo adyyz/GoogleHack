@@ -1,0 +1,2713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AML Alert Triage System — Technical Handover Report</title>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0d1117;
+      --surface:     #161b22;
+      --surface2:    #1c2230;
+      --surface3:    #21293a;
+      --border:      #30363d;
+      --border2:     #3d4754;
+      --accent:      #58a6ff;
+      --accent2:     #1f6feb;
+      --green:       #3fb950;
+      --green-dim:   #1a4a23;
+      --yellow:      #d29922;
+      --yellow-dim:  #4a3800;
+      --red:         #f85149;
+      --red-dim:     #4a1212;
+      --orange:      #e3773a;
+      --orange-dim:  #4a2210;
+      --purple:      #bc8cff;
+      --teal:        #39d0c8;
+      --text:        #e6edf3;
+      --text-muted:  #8b949e;
+      --text-dim:    #6e7681;
+      --radius:      8px;
+      --radius-lg:   12px;
+      --shadow:      0 4px 24px rgba(0,0,0,0.5);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    /* ── Layout ── */
+    .page-wrapper {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 24px 0;
+      z-index: 100;
+    }
+
+    .sidebar-logo {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .sidebar-logo .logo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, var(--accent2), var(--purple));
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .sidebar-logo .logo-badge .dot {
+      width: 8px; height: 8px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .sidebar-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .sidebar nav a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 20px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+
+    .sidebar nav a:hover {
+      color: var(--text);
+      background: var(--surface2);
+      border-left-color: var(--border2);
+    }
+
+    .sidebar nav a.active {
+      color: var(--accent);
+      background: rgba(88,166,255,0.08);
+      border-left-color: var(--accent);
+    }
+
+    .sidebar nav .section-label {
+      padding: 16px 20px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+    }
+
+    .sidebar nav .icon { font-size: 15px; }
+
+    /* ── Main Content ── */
+    main {
+      padding: 40px 48px;
+      max-width: 1100px;
+    }
+
+    /* ── Header ── */
+    .report-header {
+      margin-bottom: 48px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .report-header .tag-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+
+    .tag-blue   { background: rgba(88,166,255,0.12);  color: var(--accent);      border: 1px solid rgba(88,166,255,0.3);  }
+    .tag-green  { background: rgba(63,185,80,0.12);   color: var(--green);       border: 1px solid rgba(63,185,80,0.3);   }
+    .tag-purple { background: rgba(188,140,255,0.12); color: var(--purple);      border: 1px solid rgba(188,140,255,0.3); }
+    .tag-orange { background: rgba(227,119,58,0.12);  color: var(--orange);      border: 1px solid rgba(227,119,58,0.3);  }
+    .tag-red    { background: rgba(248,81,73,0.12);   color: var(--red);         border: 1px solid rgba(248,81,73,0.3);   }
+    .tag-teal   { background: rgba(57,208,200,0.12);  color: var(--teal);        border: 1px solid rgba(57,208,200,0.3);  }
+    .tag-yellow { background: rgba(210,153,34,0.12);  color: var(--yellow);      border: 1px solid rgba(210,153,34,0.3);  }
+    .tag-muted  { background: rgba(139,148,158,0.12); color: var(--text-muted);  border: 1px solid rgba(139,148,158,0.3); }
+    .tag-new    { background: rgba(57,208,200,0.15);  color: var(--teal);        border: 1px solid rgba(57,208,200,0.4);  }
+
+    .report-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      line-height: 1.2;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--text) 60%, var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .report-header .subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+      max-width: 640px;
+    }
+
+    .meta-row {
+      display: flex;
+      gap: 24px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); font-weight: 600; }
+    .meta-value { font-size: 13px; color: var(--text); font-weight: 500; }
+
+    /* ── Section Heading ── */
+    .section {
+      margin-bottom: 48px;
+      scroll-margin-top: 24px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .section-num {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent2), var(--purple));
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .section h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+
+    .section p, .section li {
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    .section p { margin-bottom: 12px; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      text-align: center;
+      transition: border-color 0.15s;
+    }
+
+    .stat-card:hover { border-color: var(--border2); }
+
+    .stat-card .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .stat-card .stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Stack Chips ── */
+    .stack-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stack-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .stack-chip .chip-icon { font-size: 16px; }
+    .stack-chip .chip-sub  { font-size: 11px; color: var(--text-muted); }
+
+    /* ── Data Flow ── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0;
+      margin: 8px 0 24px;
+    }
+
+    .flow-node {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .flow-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      min-width: 260px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: border-color 0.15s;
+    }
+
+    .flow-box:hover { border-color: var(--accent); }
+    .flow-box .flow-icon { font-size: 16px; }
+
+    .flow-box .flow-badge {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .flow-arrow {
+      width: 2px;
+      height: 24px;
+      background: linear-gradient(to bottom, var(--border2), var(--accent2));
+      margin-left: 24px;
+      position: relative;
+    }
+
+    .flow-arrow::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: -4px;
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 7px solid var(--accent2);
+    }
+
+    /* ── Table ── */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    .data-table th {
+      background: var(--surface2);
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .data-table td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      color: var(--text-muted);
+    }
+
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .data-table .rule-code {
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    /* ── Agents ── */
+    .agent-pipeline {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .agent-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .agent-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    .agent-card-header {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .agent-num {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .agent-card-header h3       { font-size: 13px; font-weight: 700; }
+    .agent-card-header .file-link { font-size: 10px; color: var(--text-dim); font-family: monospace; }
+
+    .agent-card-body { padding: 14px 18px; }
+
+    .agent-card-body .output-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .agent-card-body .output-list li {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .agent-card-body .output-list li::before {
+      content: '▸';
+      color: var(--accent);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .agent-meta {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .status-transition {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-family: monospace;
+      margin-top: 10px;
+      padding: 6px 10px;
+      background: var(--bg);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .s-pending    { background: rgba(210,153,34,0.2);  color: var(--yellow); }
+    .s-enriching  { background: rgba(57,208,200,0.2);  color: var(--teal);   }
+    .s-assessing  { background: rgba(88,166,255,0.2);  color: var(--accent); }
+    .s-categorise { background: rgba(188,140,255,0.2); color: var(--purple); }
+    .s-summarise  { background: rgba(227,119,58,0.2);  color: var(--orange); }
+    .s-complete   { background: rgba(63,185,80,0.2);   color: var(--green);  }
+    .s-error      { background: rgba(248,81,73,0.2);   color: var(--red);    }
+    .s-new        { background: rgba(57,208,200,0.2);  color: var(--teal);   }
+
+    /* ── Scoring Box ── */
+    .scoring-table {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .scoring-row {
+      display: flex;
+      align-items: center;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      gap: 16px;
+      font-size: 13px;
+    }
+
+    .scoring-row:last-child { border-bottom: none; }
+
+    .scoring-row .score-val {
+      font-family: monospace;
+      font-size: 16px;
+      font-weight: 700;
+      min-width: 55px;
+      color: var(--green);
+    }
+
+    .scoring-row .score-val.neg   { color: var(--red); }
+    .scoring-row .score-condition { color: var(--text-muted); flex: 1; }
+
+    .threshold-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .threshold-card {
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      text-align: center;
+      border: 1px solid;
+    }
+
+    .threshold-card .t-val    { font-size: 20px; font-weight: 700; }
+    .threshold-card .t-label  { font-size: 11px; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .threshold-card .t-verdict {
+      font-size: 11px; font-weight: 700; margin-top: 6px;
+      padding: 3px 8px; border-radius: 4px; display: inline-block;
+    }
+
+    /* ── Alert Cards ── */
+    .alert-trio {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .alert-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .alert-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+
+    .alert-card-top {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .alert-id {
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+
+    .alert-card-top h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+
+    .alert-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .metric-box {
+      background: var(--surface2);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    .metric-box .m-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; }
+    .metric-box .m-val   { font-size: 15px; font-weight: 700; margin-top: 2px; }
+
+    /* ── Score Bar ── */
+    .score-bar-wrap  { margin: 12px 0; }
+    .score-bar-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+    .score-bar-track { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+    .score-bar-fill  { height: 100%; border-radius: 3px; transition: width 0.5s; }
+
+    .alert-card-body { padding: 14px 20px; font-size: 13px; }
+    .alert-card-body .findings-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 8px;
+    }
+    .alert-card-body .finding-item { display: flex; gap: 8px; margin-bottom: 6px; color: var(--text-muted); }
+    .alert-card-body .finding-item::before { content: '•'; color: var(--accent); }
+
+    .alert-card-footer {
+      padding: 12px 20px;
+      background: var(--surface2);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .verdict-btn-row { display: flex; gap: 6px; margin-top: 12px; }
+
+    .verdict-btn {
+      flex: 1;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+      cursor: default;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .vb-fp  { background: rgba(63,185,80,0.08);  color: var(--green);  border-color: rgba(63,185,80,0.3);  }
+    .vb-tp  { background: rgba(248,81,73,0.08);  color: var(--red);    border-color: rgba(248,81,73,0.3);  }
+    .vb-inc { background: rgba(210,153,34,0.08); color: var(--yellow); border-color: rgba(210,153,34,0.3); }
+
+    /* ── UI Mapping Table ── */
+    .ui-map-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      font-size: 12px;
+      margin-bottom: 20px;
+    }
+
+    .ui-map-table th {
+      background: var(--surface2);
+      padding: 9px 14px;
+      text-align: left;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ui-map-table td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      vertical-align: top;
+    }
+
+    .ui-map-table tr:last-child td { border-bottom: none; }
+    .ui-map-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .ui-map-table .code { font-family: monospace; color: var(--teal);   font-size: 11px; }
+    .ui-map-table .path { font-family: monospace; color: var(--accent); font-size: 11px; }
+
+    /* ── Issues / Caveats Grid ── */
+    .issues-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .issue-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+    }
+
+    .issue-card .issue-title  { font-size: 13px; font-weight: 600; color: var(--text);       margin-bottom: 4px; }
+    .issue-card .issue-loc    { font-size: 11px; font-family: monospace; color: var(--accent); margin-bottom: 6px; }
+    .issue-card .issue-desc   { font-size: 12px; color: var(--text-muted); }
+    .issue-card .issue-status { align-self: start; }
+
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      white-space: nowrap;
+    }
+
+    .sb-design  { background: rgba(88,166,255,0.12); color: var(--accent);  border: 1px solid rgba(88,166,255,0.3);  }
+    .sb-partial { background: rgba(210,153,34,0.12); color: var(--yellow);  border: 1px solid rgba(210,153,34,0.3);  }
+    .sb-needs   { background: rgba(248,81,73,0.12);  color: var(--red);     border: 1px solid rgba(248,81,73,0.3);   }
+    .sb-todo    { background: rgba(188,140,255,0.12);color: var(--purple);  border: 1px solid rgba(188,140,255,0.3); }
+
+    /* ── Seed Scripts ── */
+    .seed-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .seed-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+    }
+
+    .seed-card .seed-cmd {
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--bg);
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      display: block;
+      border: 1px solid var(--border);
+    }
+
+    .seed-card .seed-desc   { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+    .seed-card .seed-output { font-size: 11px; display: flex; align-items: center; gap: 6px; color: var(--text-dim); }
+
+    /* ── Code blocks ── */
+    .code-block {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.8;
+      overflow-x: auto;
+      margin-bottom: 16px;
+      white-space: pre;
+    }
+
+    .code-block .kw  { color: var(--purple); }
+    .code-block .str { color: var(--green);  }
+    .code-block .num { color: var(--orange); }
+    .code-block .cmt { color: var(--text-dim); font-style: italic; }
+    .code-block .fn  { color: var(--accent); }
+
+    /* ── Callout ── */
+    .callout {
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .callout-icon  { font-size: 18px; flex-shrink: 0; }
+    .callout-text  { font-size: 13px; line-height: 1.6; }
+    .callout-title { font-weight: 700; margin-bottom: 4px; }
+
+    .callout-info    { background: rgba(88,166,255,0.08); border-left: 3px solid var(--accent); }
+    .callout-warn    { background: rgba(210,153,34,0.08); border-left: 3px solid var(--yellow); }
+    .callout-danger  { background: rgba(248,81,73,0.08);  border-left: 3px solid var(--red);    }
+    .callout-success { background: rgba(63,185,80,0.08);  border-left: 3px solid var(--green);  }
+
+    .callout-info    .callout-title { color: var(--accent); }
+    .callout-warn    .callout-title { color: var(--yellow); }
+    .callout-danger  .callout-title { color: var(--red);    }
+    .callout-success .callout-title { color: var(--green);  }
+
+    .callout p { color: var(--text-muted); }
+
+    /* ── Divider ── */
+    hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+
+    /* ── Footer ── */
+    .report-footer {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* ── Risk dimension bars ── */
+    .risk-dims    { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+    .risk-dim-row { display: grid; grid-template-columns: 120px 1fr 36px; align-items: center; gap: 8px; }
+    .risk-dim-label { font-size: 11px; color: var(--text-muted); }
+    .risk-dim-val   { font-size: 11px; color: var(--text-muted); text-align: right; }
+
+    /* ── Two-col responsive grid (used in S11) ── */
+    .two-col-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    /* ── Sub-section heading accent bar ── */
+    .sub-heading {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 28px 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sub-heading .accent-bar {
+      width: 4px;
+      height: 18px;
+      border-radius: 2px;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .page-wrapper   { grid-template-columns: 1fr; }
+      .sidebar        { display: none; }
+      main            { padding: 24px 20px; max-width: 100%; }
+      .agent-pipeline { grid-template-columns: 1fr; }
+      .alert-trio     { grid-template-columns: 1fr; }
+      .threshold-grid { grid-template-columns: 1fr; }
+      .two-col-grid   { grid-template-columns: 1fr; }
+    }
+
+    /* ── Print ── */
+    @media print {
+      .sidebar { display: none; }
+      .page-wrapper { grid-template-columns: 1fr; }
+      body { background: white; color: black; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <!-- ══════════════════════════════ SIDEBAR ══════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-badge"><span class="dot"></span> AML Triage</div>
+      <div class="sidebar-subtitle">Technical Handover Report<br>v1.0 — Internal Reference</div>
+    </div>
+    <nav>
+      <div class="section-label">Overview</div>
+      <a href="#s1" class="active"><span class="icon">🏗</span> System Overview</a>
+      <a href="#s2"><span class="icon">🔄</span> Data Flow</a>
+
+      <div class="section-label">Backend</div>
+      <a href="#s3"><span class="icon">⚡</span> Alert Generation</a>
+      <a href="#s4"><span class="icon">🤖</span> Triage Pipeline</a>
+      <a href="#s5"><span class="icon">🏷</span> Auto-Label</a>
+
+      <div class="section-label">Analyst UX</div>
+      <a href="#s6"><span class="icon">🔍</span> Live Alerts</a>
+      <a href="#s7"><span class="icon">🖥</span> UI Mapping</a>
+      <a href="#s8"><span class="icon">✅</span> Verdict Submission</a>
+
+      <div class="section-label">Operations</div>
+      <a href="#s9"><span class="icon">⚠️</span> Known Issues</a>
+      <a href="#s10"><span class="icon">🌱</span> Seed Scripts</a>
+
+      <div class="section-label">Evolution</div>
+      <a href="#s11"><span class="icon">🧬</span> Recalibration Loop</a>
+    </nav>
+  </aside>
+
+  <!-- ══════════════════════════════ MAIN ══════════════════════════════ -->
+  <main>
+
+    <!-- ── HEADER ── -->
+    <div class="report-header">
+      <div class="tag-row">
+        <span class="tag tag-blue">Technical Handover</span>
+        <span class="tag tag-green">v1.0 Production</span>
+        <span class="tag tag-purple">AML / FinCrime</span>
+        <span class="tag tag-muted">Internal Use Only</span>
+      </div>
+      <h1>AML Alert Triage System</h1>
+      <p class="subtitle">
+        A full-stack, AI-augmented Anti-Money Laundering triage platform that combines rule-based alert generation,
+        a 4-agent LLM pipeline, and a human-in-the-loop analyst review interface — with continuous feedback-driven
+        rule recalibration.
+      </p>
+      <div class="meta-row">
+        <div class="meta-item">
+          <span class="meta-label">Frontend</span>
+          <span class="meta-value">React 19 + TypeScript (Vite)</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Backend</span>
+          <span class="meta-value">FastAPI + Python 3.13</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Database</span>
+          <span class="meta-value">SQLite (aml_triage.db)</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">LLM Provider</span>
+          <span class="meta-value">AWS Bedrock (Claude)</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Transactions</span>
+          <span class="meta-value">24,999 raw records</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION 1 — SYSTEM OVERVIEW
+    ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="s1">
+      <div class="section-header">
+        <div class="section-num">1</div>
+        <h2>System Overview</h2>
+      </div>
+
+      <p>
+        The application is a <strong>React + FastAPI</strong> system that automatically triages AML
+        (Anti-Money Laundering) alerts using a 4-agent LLM pipeline, then presents those outputs to a
+        human analyst for a final verdict. Analyst decisions feed back into an
+        <strong>Evolution Agent</strong> that recalibrates detection rules over time, creating a
+        continuously improving feedback loop.
+      </p>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">💡</span>
+        <div class="callout-text">
+          <div class="callout-title">Architecture Philosophy</div>
+          <p>The system is intentionally designed as <em>human-in-the-loop</em>: the AI pipeline
+          triages and prioritises, but a licensed analyst always makes the final SAR/escalation
+          decision. The Evolution Agent learns from analyst overrides to tune detection thresholds
+          over time.</p>
+        </div>
+      </div>
+
+      <div class="stack-grid">
+        <div class="stack-chip">
+          <span class="chip-icon">⚛️</span>
+          <div>
+            <div>React 19 + TypeScript</div>
+            <div class="chip-sub">Vite build tooling</div>
+          </div>
+        </div>
+        <div class="stack-chip">
+          <span class="chip-icon">🐍</span>
+          <div>
+            <div>FastAPI + Python 3.13</div>
+            <div class="chip-sub">Async + thread-pool LLM calls</div>
+          </div>
+        </div>
+        <div class="stack-chip">
+          <span class="chip-icon">🗄️</span>
+          <div>
+            <div>SQLite</div>
+            <div class="chip-sub">aml_triage.db — persistent store</div>
+          </div>
+        </div>
+        <div class="stack-chip">
+          <span class="chip-icon">☁️</span>
+          <div>
+            <div>AWS Bedrock</div>
+            <div class="chip-sub">Claude Haiku / Sonnet (bearer token)</div>
+          </div>
+        </div>
+        <div class="stack-chip">
+          <span class="chip-icon">🧠</span>
+          <div>
+            <div>In-memory Registry</div>
+            <div class="chip-sub">_alert_registry in main.py</div>
+          </div>
+        </div>
+        <div class="stack-chip">
+          <span class="chip-icon">📊</span>
+          <div>
+            <div>DataStore (JSON)</div>
+            <div class="chip-sub">Customers, accounts, transactions</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-grid">
+        <div class="stat-card">
+          <div class="stat-value" style="color:var(--accent)">24,999</div>
+          <div class="stat-label">Raw Transactions</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:var(--orange)">8</div>
+          <div class="stat-label">Detection Rules</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:var(--purple)">4</div>
+          <div class="stat-label">LLM Agents</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:var(--green)">5</div>
+          <div class="stat-label">Total Agents (incl. Evo)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION 2 — DATA FLOW
+    ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="s2">
+      <div class="section-header">
+        <div class="section-num">2</div>
+        <h2>Data Flow — End to End</h2>
+      </div>
+
+      <p>
+        The pipeline moves data through seven distinct stages, from raw transaction ingestion through
+        to analyst feedback and evolutionary rule recalibration. Each stage writes state to both the
+        in-memory registry and SQLite to ensure durability.
+      </p>
+
+      <div class="flow">
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--border2)">
+            <span class="flow-icon">💾</span>
+            <span>Raw Transactions</span>
+            <span class="flow-badge" style="background:rgba(139,148,158,0.15);color:var(--text-muted)">24,999</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:12px;">JSON DataStore loaded on startup</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--orange)">
+            <span class="flow-icon">⚙️</span>
+            <span>Rule Engine</span>
+            <span class="flow-badge" style="background:rgba(227,119,58,0.2);color:var(--orange)">8 Rules</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:12px;">alert_generator.py — pure Python, sync</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--yellow)">
+            <span class="flow-icon">🔔</span>
+            <span>Alert Created</span>
+            <span class="flow-badge s-pending">PENDING</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:12px;">Written to memory + SQLite</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--purple)">
+            <span class="flow-icon">🤖</span>
+            <span>4-Agent Triage Pipeline</span>
+            <span class="flow-badge" style="background:rgba(188,140,255,0.2);color:var(--purple)">LLM</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:12px;">orchestrator.py — sequential agents</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--green)">
+            <span class="flow-icon">✅</span>
+            <span>Alert with triage_result_json</span>
+            <span class="flow-badge s-complete">COMPLETE</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:12px;">All 4 outputs stored in SQLite</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--teal)">
+            <span class="flow-icon">🏷</span>
+            <span>Agent 0 Auto-Label</span>
+            <span class="flow-badge" style="background:rgba(57,208,200,0.2);color:var(--teal)">HEURISTIC</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:12px;">predicted_verdict — no LLM</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--accent)">
+            <span class="flow-icon">👤</span>
+            <span>Analyst Reviews &amp; Labels</span>
+            <span class="flow-badge" style="background:rgba(88,166,255,0.2);color:var(--accent)">HUMAN</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:12px;">analyst_verdict via LabelingPage</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--red)">
+            <span class="flow-icon">🔬</span>
+            <span>Evolution Agent 5</span>
+            <span class="flow-badge" style="background:rgba(248,81,73,0.2);color:var(--red)">RECALIBRATE</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:12px;">Rules updated based on analyst feedback</span>
+        </div>
+      </div>
+
+      <div class="callout callout-warn">
+        <span class="callout-icon">⚠️</span>
+        <div class="callout-text">
+          <div class="callout-title">Alert Count vs Transaction Count</div>
+          <p>A single transaction can trigger multiple detection rules, producing multiple independent
+          alerts. This is why <code>total_alerts &gt; total_transactions</code> in the database.
+          Each alert is triaged independently through the full pipeline.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION 3 — ALERT GENERATION
+    ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="s3">
+      <div class="section-header">
+        <div class="section-num">3</div>
+        <h2>Alert Generation — <code style="font-size:14px;color:var(--accent)">backend/services/alert_generator.py</code></h2>
+      </div>
+
+      <p>
+        Eight detection rules scan all 24,999 transactions and create
+        <span class="status-pill s-pending">PENDING</span> alerts in both the in-memory registry
+        (<code>_alert_registry</code> in <code>main.py</code>) and SQLite (<code>aml_triage.db</code>).
+        Rules operate at transaction-level, meaning one transaction can trigger multiple rules
+        simultaneously.
+      </p>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Rule ID</th>
+            <th>Trigger Condition</th>
+            <th>Risk Signal</th>
+            <th>Category</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="rule-code">RULE_HV</span></td>
+            <td>Transaction value &gt; AUD 10,000</td>
+            <td>High-value cash movement threshold</td>
+            <td><span class="tag tag-orange">Volume</span></td>
+          </tr>
+          <tr>
+            <td><span class="rule-code">RULE_CRYPTO</span></td>
+            <td>Transaction type = Cryptocurrency</td>
+            <td>Pseudonymous asset conversion</td>
+            <td><span class="tag tag-purple">Asset Type</span></td>
+          </tr>
+          <tr>
+            <td><span class="rule-code">RULE_PEP</span></td>
+            <td>Customer flagged as Politically Exposed Person</td>
+            <td>Elevated corruption/bribery risk</td>
+            <td><span class="tag tag-red">Profile</span></td>
+          </tr>
+          <tr>
+            <td><span class="rule-code">RULE_DECEASED</span></td>
+            <td>Transaction date &gt; customer's deceased date</td>
+            <td>Identity fraud / estate fraud</td>
+            <td><span class="tag tag-red">Identity</span></td>
+          </tr>
+          <tr>
+            <td><span class="rule-code">RULE_DORMANT</span></td>
+            <td>Activity after 12+ month inactivity gap</td>
+            <td>Account takeover / reactivation risk</td>
+            <td><span class="tag tag-yellow">Behaviour</span></td>
+          </tr>
+          <tr>
+            <td><span class="rule-code">RULE_MULTI_CCY</span></td>
+            <td>3+ currencies within a 30-day window</td>
+            <td>Layering / currency conversion chains</td>
+            <td><span class="tag tag-teal">Pattern</span></td>
+          </tr>
+          <tr>
+            <td><span class="rule-code">RULE_CASH</span></td>
+            <td>Cash &gt; 50% of 30-day transaction volume</td>
+            <td>Cash-intensive structuring / smurfing</td>
+            <td><span class="tag tag-orange">Volume</span></td>
+          </tr>
+          <tr>
+            <td><span class="rule-code">RULE_FOREIGN_WIRE</span></td>
+            <td>Non-AUD wired transfer</td>
+            <td>Cross-border fund movement</td>
+            <td><span class="tag tag-blue">Wire</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">ℹ️</span>
+        <div class="callout-text">
+          <div class="callout-title">Rule Engine is Synchronous</div>
+          <p>Alert generation runs as a pure Python synchronous scan — no LLM involvement. This keeps
+          initial alert creation fast and deterministic. All 8 rules are evaluated independently per
+          transaction, and all matches are persisted immediately.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION 4 — TRIAGE PIPELINE
+    ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="s4">
+      <div class="section-header">
+        <div class="section-num">4</div>
+        <h2>Triage Pipeline — <code style="font-size:14px;color:var(--accent)">backend/agents/orchestrator.py</code></h2>
+      </div>
+
+      <p>
+        Each <span class="status-pill s-pending">PENDING</span> alert passes through 4 sequential
+        agents. Status transitions are written to both the in-memory registry and SQLite at each step.
+        On any agent failure, the alert's status becomes
+        <span class="status-pill s-error">ERROR</span> with an <code>error_message</code> field
+        populated.
+      </p>
+
+      <div class="agent-pipeline">
+
+        <!-- Agent 1 -->
+        <div class="agent-card">
+          <div class="agent-card-header">
+            <div class="agent-num" style="background:linear-gradient(135deg,#1a4a23,#3fb950);color:#fff;">1</div>
+            <div>
+              <h3>Enrichment</h3>
+              <div class="file-link">agent1_enrichment.py</div>
+            </div>
+          </div>
+          <div class="agent-card-body">
+            <ul class="output-list">
+              <li>No LLM — pure Python, fully synchronous</li>
+              <li>Joins alert to DataStore (customers, accounts, transactions)</li>
+              <li>Builds enriched_context object</li>
+              <li>Customer profile + account details</li>
+              <li>Full transaction history for the account</li>
+              <li>Risk flags: PEP, DECEASED, MULTI_ACCOUNT</li>
+            </ul>
+            <div class="agent-meta">
+              <span class="tag tag-green">No LLM</span>
+              <span class="tag tag-teal">Sync</span>
+            </div>
+            <div class="status-transition">
+              <span class="status-pill s-pending">PENDING</span>
+              <span style="color:var(--text-dim)">→</span>
+              <span class="status-pill s-enriching">ENRICHING</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent 2 -->
+        <div class="agent-card">
+          <div class="agent-card-header">
+            <div class="agent-num" style="background:linear-gradient(135deg,#1a3a6e,#58a6ff);color:#fff;">2</div>
+            <div>
+              <h3>Risk Assessment</h3>
+              <div class="file-link">agent2_risk.py</div>
+            </div>
+          </div>
+          <div class="agent-card-body">
+            <ul class="output-list">
+              <li>LLM call via asyncio.to_thread</li>
+              <li>Input: enriched_context</li>
+              <li>overall_risk_score (0–1 float)</li>
+              <li>risk_dimensions: 5 dimensions, each 0–1</li>
+              <li>key_risk_indicators (list with severity + evidence)</li>
+              <li>reasoning: human-readable text explanation</li>
+            </ul>
+            <div class="agent-meta">
+              <span class="tag tag-blue">LLM</span>
+              <span class="tag tag-purple">Async Thread</span>
+            </div>
+            <div class="status-transition">
+              <span class="status-pill s-enriching">ENRICHING</span>
+              <span style="color:var(--text-dim)">→</span>
+              <span class="status-pill s-assessing">ASSESSING</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent 3 -->
+        <div class="agent-card">
+          <div class="agent-card-header">
+            <div class="agent-num" style="background:linear-gradient(135deg,#3a1a6e,#bc8cff);color:#fff;">3</div>
+            <div>
+              <h3>Categorisation</h3>
+              <div class="file-link">agent3_category.py</div>
+            </div>
+          </div>
+          <div class="agent-card-body">
+            <ul class="output-list">
+              <li>LLM call via asyncio.to_thread</li>
+              <li>Input: enriched_context + risk_result</li>
+              <li>primary_typology (e.g. Layering, Smurfing)</li>
+              <li>secondary_typologies (list)</li>
+              <li>confidence score (0–1)</li>
+              <li>recommended_action: CLOSE / REVIEW / ESCALATE</li>
+              <li>risk_tier: LOW / MEDIUM / HIGH / CRITICAL</li>
+            </ul>
+            <div class="agent-meta">
+              <span class="tag tag-blue">LLM</span>
+              <span class="tag tag-purple">Async Thread</span>
+            </div>
+            <div class="status-transition">
+              <span class="status-pill s-assessing">ASSESSING</span>
+              <span style="color:var(--text-dim)">→</span>
+              <span class="status-pill s-categorise">CATEGORISING</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent 4 -->
+        <div class="agent-card">
+          <div class="agent-card-header">
+            <div class="agent-num" style="background:linear-gradient(135deg,#4a1a10,#e3773a);color:#fff;">4</div>
+            <div>
+              <h3>Investigation Summary</h3>
+              <div class="file-link">agent4_summary.py</div>
+            </div>
+          </div>
+          <div class="agent-card-body">
+            <ul class="output-list">
+              <li>LLM call via asyncio.to_thread</li>
+              <li>Input: all prior agent outputs</li>
+              <li>alert_overview: executive summary</li>
+              <li>key_findings: structured list</li>
+              <li>recommended_next_steps: action list</li>
+              <li>confidence_level: LOW / MEDIUM / HIGH</li>
+              <li>estimated_review_time (minutes)</li>
+            </ul>
+            <div class="agent-meta">
+              <span class="tag tag-blue">LLM</span>
+              <span class="tag tag-purple">Async Thread</span>
+            </div>
+            <div class="status-transition">
+              <span class="status-pill s-categorise">CATEGORISING</span>
+              <span style="color:var(--text-dim)">→</span>
+              <span class="status-pill s-summarise">SUMMARISING</span>
+              <span style="color:var(--text-dim)">→</span>
+              <span class="status-pill s-complete">COMPLETE</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="callout callout-success">
+        <span class="callout-icon">💾</span>
+        <div class="callout-text">
+          <div class="callout-title">Persistence</div>
+          <p>All 4 agent outputs are merged and stored as a single <code>triage_result_json</code>
+          blob in SQLite. The JSON schema is:
+          <code>{ risk_assessment, categorisation, investigation_summary }</code>. Enrichment output
+          (<code>enriched_context</code>) is used as pipeline input but is not separately persisted.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <span class="callout-icon">🔴</span>
+        <div class="callout-text">
+          <div class="callout-title">Error Handling</div>
+          <p>On any agent failure (LLM timeout, parsing error, Bedrock rate limit), the alert status
+          transitions to <span class="status-pill s-error">ERROR</span> and
+          <code>error_message</code> is populated. The alert is not retried automatically — a manual
+          re-triage or batch restart is required.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION 5 — AUTO-LABEL
+    ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="s5">
+      <div class="section-header">
+        <div class="section-num">5</div>
+        <h2>Auto-Label — <code style="font-size:14px;color:var(--accent)">backend/agents/agent0_autolabel.py</code></h2>
+      </div>
+
+      <p>
+        Agent 0 runs on startup and after each batch triage. It scores completed alerts
+        <strong>without any LLM call</strong> using deterministic heuristic rules applied to
+        <code>triage_result</code> fields. The goal is to pre-sort alerts so analysts can
+        prioritise TRUE_POSITIVE candidates first.
+      </p>
+
+      <h3 style="font-size:14px;margin-bottom:12px;color:var(--text)">Scoring Weights (additive)</h3>
+      <div class="scoring-table">
+        <div class="scoring-row">
+          <span class="score-val">+0.50</span>
+          <span class="score-condition">if <code>primary_typology == "LOW_RISK"</code> — strongest single indicator of false positive</span>
+        </div>
+        <div class="scoring-row">
+          <span class="score-val">+0.30</span>
+          <span class="score-condition">if <code>recommended_action == "CLOSE"</code> — LLM recommended no further action</span>
+        </div>
+        <div class="scoring-row">
+          <span class="score-val">+0.20</span>
+          <span class="score-condition">if <code>confidence &lt; 0.4</code> — LLM categorisation confidence is low (ambiguous signal)</span>
+        </div>
+        <div class="scoring-row">
+          <span class="score-val">+0.10</span>
+          <span class="score-condition">if investigation <code>confidence_level == "LOW"</code> — summary agent also uncertain</span>
+        </div>
+      </div>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">📐</span>
+        <div class="callout-text">
+          <div class="callout-title">Score Interpretation</div>
+          <p>A higher <code>fp_probability</code> score means the alert is <em>more likely</em> to
+          be a false positive. Max possible score is <strong>1.10</strong> (all conditions true).
+          The score is not normalised to 1.0 by design — the heuristic weights are calibrated
+          against observed analyst verdicts during system tuning.</p>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px;margin-bottom:12px;color:var(--text)">Classification Thresholds</h3>
+      <div class="threshold-grid">
+        <div class="threshold-card" style="border-color:rgba(63,185,80,0.3);background:rgba(63,185,80,0.05);">
+          <div class="t-val" style="color:var(--green)">≥ 0.65</div>
+          <div class="t-label" style="color:var(--text-muted)">fp_probability</div>
+          <div class="t-verdict" style="background:rgba(63,185,80,0.15);color:var(--green)">AUTO_FP</div>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:8px;">Likely false positive — deprioritise</p>
+        </div>
+        <div class="threshold-card" style="border-color:rgba(210,153,34,0.3);background:rgba(210,153,34,0.05);">
+          <div class="t-val" style="color:var(--yellow)">0.26 – 0.64</div>
+          <div class="t-label" style="color:var(--text-muted)">fp_probability</div>
+          <div class="t-verdict" style="background:rgba(210,153,34,0.15);color:var(--yellow)">AUTO_UNCERTAIN</div>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:8px;">Ambiguous — analyst must decide</p>
+        </div>
+        <div class="threshold-card" style="border-color:rgba(248,81,73,0.3);background:rgba(248,81,73,0.05);">
+          <div class="t-val" style="color:var(--red)">≤ 0.25</div>
+          <div class="t-label" style="color:var(--text-muted)">fp_probability</div>
+          <div class="t-verdict" style="background:rgba(248,81,73,0.15);color:var(--red)">AUTO_TP</div>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:8px;">Likely true positive — prioritise</p>
+        </div>
+      </div>
+
+      <p>
+        Results are stored in three DB columns: <code>predicted_verdict</code>,
+        <code>predicted_fp_probability</code>, and <code>predicted_reason</code>. These are
+        read-only to analysts — they appear as contextual cues, not binding decisions.
+      </p>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION 6 — THREE LIVE ALERTS
+    ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="s6">
+      <div class="section-header">
+        <div class="section-num">6</div>
+        <h2>Three Real Unlabeled Alerts — What the Analyst Sees</h2>
+      </div>
+
+      <p>
+        The following three alerts represent the full spectrum of auto-label outcomes currently in
+        the system. They illustrate how the same triggering rule (<code>RULE_HV</code>) can produce
+        very different risk profiles depending on the enriched customer and account context.
+      </p>
+
+      <div class="alert-trio">
+
+        <!-- ALERT 1 — UNCERTAIN -->
+        <div class="alert-card">
+          <div class="alert-card-top" style="border-left:3px solid var(--yellow);">
+            <div class="alert-id">Alert ID: d696a1bb</div>
+            <h3 style="color:var(--yellow)">AUTO_UNCERTAIN</h3>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Borderline — analyst judgement required</div>
+            <div class="alert-metrics">
+              <div class="metric-box">
+                <div class="m-label">Rule</div>
+                <div class="m-val" style="font-size:12px;color:var(--orange);">RULE_HV</div>
+              </div>
+              <div class="metric-box">
+                <div class="m-label">Risk Tier</div>
+                <div class="m-val" style="font-size:13px;color:var(--red);">HIGH</div>
+              </div>
+              <div class="metric-box">
+                <div class="m-label">Typology</div>
+                <div class="m-val" style="font-size:12px;color:var(--purple);">Layering</div>
+              </div>
+              <div class="metric-box">
+                <div class="m-label">FP Probability</div>
+                <div class="m-val" style="color:var(--yellow);">0.42</div>
+              </div>
+            </div>
+            <div class="score-bar-wrap">
+              <div class="score-bar-label"><span>Overall Risk Score</span><span>42 / 100</span></div>
+              <div class="score-bar-track">
+                <div class="score-bar-fill" style="width:42%;background:linear-gradient(90deg,var(--yellow),var(--orange));"></div>
+              </div>
+            </div>
+            <div class="risk-dims">
+              <div class="risk-dim-row">
+                <span class="risk-dim-label">Transaction Risk</span>
+                <div class="score-bar-track" style="flex:1;height:5px;"><div class="score-bar-fill" style="width:65%;background:var(--red);"></div></div>
+                <span class="risk-dim-val">0.65</span>
+              </div>
+              <div class="risk-dim-row">
+                <span class="risk-dim-label">Account Risk</span>
+                <div class="score-bar-track" style="flex:1;height:5px;"><div class="score-bar-fill" style="width:55%;background:var(--yellow);"></div></div>
+                <span class="risk-dim-val">0.55</span>
+              </div>
+              <div class="risk-dim-row">
+                <span class="risk-dim-label">Customer Risk</span>
+                <div class="score-bar-track" style="flex:1;height:5px;"><div class="score-bar-fill" style="width:25%;background:var(--green);"></div></div>
+                <span class="risk-dim-val">0.25</span>
+              </div>
+              <div class="risk-dim-row">
+                <span class="risk-dim-label">Network Risk</span>
+                <div class="score-bar-track" style="flex:1;height:5px;"><div class="score-bar-fill" style="width:5%;background:var(--green);"></div></div>
+                <span class="risk-dim-val">0.05</span>
+              </div>
+            </div>
+          </div>
+          <div class="alert-card-body">
+            <div class="findings-title">Signal Context</div>
+            <div class="finding-item">76-year-old customer, 4 accounts</div>
+            <div class="finding-item">GBP cash deposit to a business account that was later closed</div>
+            <div class="finding-item">Transaction risk HIGH, account risk MEDIUM</div>
+            <div class="finding-item">Customer risk LOW, network risk negligible — clean profile</div>
+          </div>
+          <div class="alert-card-footer">
+            <strong style="color:var(--text)">🎯 Analyst Focus:</strong> Verify whether the transaction
+            date predates account closure. If yes → likely data integrity issue (FP). If transaction
+            postdates closure → escalate. Elderly customer adds vulnerability context.
+            <div class="verdict-btn-row">
+              <div class="verdict-btn vb-fp">False Positive</div>
+              <div class="verdict-btn vb-inc">Inconclusive</div>
+              <div class="verdict-btn vb-tp">True Positive</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ALERT 2 — AUTO_TP -->
+        <div class="alert-card">
+          <div class="alert-card-top" style="border-left:3px solid var(--red);">
+            <div class="alert-id">Alert ID: cf5afffc</div>
+            <h3 style="color:var(--red)">AUTO_TP</h3>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Likely true positive — prioritise investigation</div>
+            <div class="alert-metrics">
+              <div class="metric-box">
+                <div class="m-label">Rule</div>
+                <div class="m-val" style="font-size:12px;color:var(--orange);">RULE_HV</div>
+              </div>
+              <div class="metric-box">
+                <div class="m-label">Risk Tier</div>
+                <div class="m-val" style="font-size:13px;color:var(--red);">HIGH</div>
+              </div>
+              <div class="metric-box">
+                <div class="m-label">Typology</div>
+                <div class="m-val" style="font-size:12px;color:var(--purple);">Layering</div>
+              </div>
+              <div class="metric-box">
+                <div class="m-label">FP Probability</div>
+                <div class="m-val" style="color:var(--red);">0.14</div>
+              </div>
+            </div>
+            <div class="score-bar-wrap">
+              <div class="score-bar-label"><span>Overall Risk Score</span><span>58 / 100</span></div>
+              <div class="score-bar-track">
+                <div class="score-bar-fill" style="width:58%;background:linear-gradient(90deg,var(--orange),var(--red));"></div>
+              </div>
+            </div>
+            <div class="risk-dims">
+              <div class="risk-dim-row">
+                <span class="risk-dim-label">Transaction Risk</span>
+                <div class="score-bar-track" style="flex:1;height:5px;"><div class="score-bar-fill" style="width:75%;background:var(--red);"></div></div>
+                <span class="risk-dim-val">0.75</span>
+              </div>
+              <div class="risk-dim-row">
+                <span class="risk-dim-label">Network Risk</span>
+                <div class="score-bar-track" style="flex:1;height:5px;"><div class="score-bar-fill" style="width:70%;background:var(--red);"></div></div>
+                <span class="risk-dim-val">0.70</span>
+              </div>
+              <div class="risk-dim-row">
+                <span class="risk-dim-label">Behavioural Risk</span>
+                <div class="score-bar-track" style="flex:1;height:5px;"><div class="score-bar-fill" style="width:65%;background:var(--orange);"></div></div>
+                <span class="risk-dim-val">0.65</span>
+              </div>
+            </div>
+          </div>
+          <div class="alert-card-body">
+            <div class="findings-title">Signal Context</div>
+            <div class="finding-item">Account dormant since <strong>2008</strong> — reactivated after 16+ years</div>
+            <div class="finding-item">Single wire to first-time counterparty "Franco-Wagner" (est. 2021)</div>
+            <div class="finding-item">Cross-currency: GBP → AUD. No prior relationship with counterparty</div>
+            <div class="finding-item">Network, behavioural, and transaction risk all HIGH</div>
+          </div>
+          <div class="alert-card-footer">
+            <strong style="color:var(--text)">🚨 Analyst Focus:</strong> Classic account takeover /
+            layering pattern. Extended dormancy + first-time counterparty + irreversible wire =
+            strongest signal combination.
+            <strong>Contact customer directly to verify authorisation before any other step.</strong>
+            <div class="verdict-btn-row">
+              <div class="verdict-btn vb-fp">False Positive</div>
+              <div class="verdict-btn vb-inc">Inconclusive</div>
+              <div class="verdict-btn vb-tp">True Positive</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ALERT 3 — AUTO_FP -->
+        <div class="alert-card">
+          <div class="alert-card-top" style="border-left:3px solid var(--green);">
+            <div class="alert-id">Alert ID: ALT-90F53FB537</div>
+            <h3 style="color:var(--green)">AUTO_FP</h3>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Likely false positive — low priority</div>
+            <div class="alert-metrics">
+              <div class="metric-box">
+                <div class="m-label">Rule</div>
+                <div class="m-val" style="font-size:12px;color:var(--orange);">RULE_HV</div>
+              </div>
+              <div class="metric-box">
+                <div class="m-label">Risk Tier</div>
+                <div class="m-val" style="font-size:13px;color:var(--yellow);">MEDIUM</div>
+              </div>
+              <div class="metric-box">
+                <div class="m-label">Typology</div>
+                <div class="m-val" style="font-size:12px;color:var(--purple);">Layering</div>
+              </div>
+              <div class="metric-box">
+                <div class="m-label">FP Probability</div>
+                <div class="m-val" style="color:var(--green);">0.72</div>
+              </div>
+            </div>
+            <div class="score-bar-wrap">
+              <div class="score-bar-label"><span>Overall Risk Score</span><span>28 / 100</span></div>
+              <div class="score-bar-track">
+                <div class="score-bar-fill" style="width:28%;background:linear-gradient(90deg,var(--green),var(--teal));"></div>
+              </div>
+            </div>
+          </div>
+          <div class="alert-card-body">
+            <div class="findings-title">Signal Context</div>
+            <div class="finding-item">Overall risk score low (0.28), no anomaly signals</div>
+            <div class="finding-item">No PEP flag. Recommended action: REVIEW (not ESCALATE)</div>
+            <div class="finding-item">Trigger: GBP refund on a term deposit — unusual account type but not inherently suspicious</div>
+            <div class="finding-item">Missing counterparty field is the main data gap</div>
+          </div>
+          <div class="alert-card-footer">
+            <strong style="color:var(--text)">📋 Analyst Focus:</strong> Is there a legitimate refund
+            explanation (cancelled purchase, insurance payout, term maturity)? Obtain documentation →
+            closes cleanly.
+            <strong>Work AUTO_TP alerts first — return to this only after urgent queue is clear.</strong>
+            <div class="verdict-btn-row">
+              <div class="verdict-btn vb-fp">False Positive</div>
+              <div class="verdict-btn vb-inc">Inconclusive</div>
+              <div class="verdict-btn vb-tp">True Positive</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="callout callout-warn">
+        <span class="callout-icon">📋</span>
+        <div class="callout-text">
+          <div class="callout-title">Analyst Workflow Recommendation</div>
+          <p>Work alerts in this priority order: <strong>AUTO_TP → AUTO_UNCERTAIN → AUTO_FP</strong>.
+          All three alerts above were triggered by <code>RULE_HV</code> (transaction &gt; AUD 10,000) —
+          the rule itself is not selective. The pipeline's risk differentiation comes entirely from the
+          enriched customer/account context evaluated by Agents 2–4.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION 7 — UI MAPPING
+    ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="s7">
+      <div class="section-header">
+        <div class="section-num">7</div>
+        <h2>UI Signal Mapping — Labeling Page</h2>
+      </div>
+
+      <p>
+        Each customer row in the Labeling Page (<code>src/pages/LabelingPage.tsx</code>) expands via
+        <code>CustomerGroupRow</code> / <code>AlertLabelModal</code>. The table below maps every
+        visible UI element to its data source and code location.
+      </p>
+
+      <table class="ui-map-table">
+        <thead>
+          <tr>
+            <th>UI Element</th>
+            <th>Data Source</th>
+            <th>Code Location</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Risk dimension bars (5 bars)</td>
+            <td><span class="code">triage_result.risk_assessment.risk_dimensions</span></td>
+            <td><span class="path">AlertLabelModal.tsx:122–138</span></td>
+          </tr>
+          <tr>
+            <td>Overall score /100 display</td>
+            <td><span class="code">triage_result.risk_assessment.overall_risk_score</span></td>
+            <td><span class="path">AlertLabelModal.tsx:117</span></td>
+          </tr>
+          <tr>
+            <td>Typology badge</td>
+            <td><span class="code">triage_result.categorisation.primary_typology</span></td>
+            <td><span class="path">AlertLabelModal.tsx</span></td>
+          </tr>
+          <tr>
+            <td>Confidence % display</td>
+            <td><span class="code">triage_result.categorisation.confidence</span></td>
+            <td><span class="path">AlertLabelModal.tsx</span></td>
+          </tr>
+          <tr>
+            <td>FP probability progress bar</td>
+            <td><span class="code">predicted_fp_probability</span></td>
+            <td><span class="path">AlertLabelModal.tsx:187</span></td>
+          </tr>
+          <tr>
+            <td>Auto verdict chip (AUTO_FP / AUTO_TP / AUTO_UNCERTAIN)</td>
+            <td><span class="code">predicted_verdict</span></td>
+            <td><span class="path">AlertLabelModal.tsx</span></td>
+          </tr>
+          <tr>
+            <td>Key findings list</td>
+            <td><span class="code">triage_result.investigation_summary.key_findings</span></td>
+            <td><span class="path">AlertLabelModal.tsx</span></td>
+          </tr>
+          <tr>
+            <td>Recommended next steps list</td>
+            <td><span class="code">triage_result.investigation_summary.recommended_next_steps</span></td>
+            <td><span class="path">AlertLabelModal.tsx</span></td>
+          </tr>
+          <tr>
+            <td>Reasoning text block</td>
+            <td><span class="code">triage_result.risk_assessment.reasoning</span></td>
+            <td><span class="path">AlertLabelModal.tsx</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-warn">
+        <span class="callout-icon">⚠️</span>
+        <div class="callout-text">
+          <div class="callout-title">Score Scale Inconsistency — Known Issue (Partially Fixed)</div>
+          <p>Seeded alerts (<code>seed_rich_alerts.py</code>) store risk scores as
+          <strong>integers 0–100</strong>. LLM-triaged alerts store scores as
+          <strong>floats 0–1</strong>. The UI normalises at render time:</p>
+          <pre style="background:var(--bg);padding:10px;border-radius:6px;margin-top:8px;font-size:12px;color:var(--teal);border:1px solid var(--border);">score &gt; 1 ? score : score * 100</pre>
+          <p style="margin-top:8px;">This fix exists in both <code>ScoreBar.tsx</code> and
+          <code>AlertLabelModal.tsx</code>. The underlying DB values are <strong>not normalised</strong>
+          — mixing will persist until a migration script is written to standardise all seeded scores
+          to 0–1.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION 8 — VERDICT SUBMISSION
+    ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="s8">
+      <div class="section-header">
+        <div class="section-num">8</div>
+        <h2>Analyst Verdict Submission</h2>
+      </div>
+
+      <p>
+        When an analyst clicks one of the three verdict buttons in the modal, a feedback POST is issued
+        to the backend. The backend writes the verdict to SQLite immediately, and the UI updates local
+        state without requiring a full page reload.
+      </p>
+
+      <div class="card" style="margin-bottom:20px;">
+        <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">API Endpoint</div>
+        <div class="code-block"><span class="kw">POST</span> <span class="str">/api/alerts/{alert_id}/feedback</span>
+
+<span class="cmt">// Request Body</span>
+{
+  <span class="str">"verdict"</span>:         <span class="str">"FALSE_POSITIVE"</span>  <span class="cmt">// | "TRUE_POSITIVE" | "INCONCLUSIVE"</span>
+  <span class="str">"notes"</span>:           <span class="str">"Optional analyst notes..."</span>
+  <span class="str">"override_action"</span>: <span class="str">"CLOSE"</span>         <span class="cmt">// | "REVIEW" | "ESCALATE" | null</span>
+}
+
+<span class="cmt">// Database columns written:</span>
+<span class="fn">analyst_verdict</span>       → verdict value
+<span class="fn">analyst_notes</span>         → notes string
+<span class="fn">feedback_submitted_at</span> → UTC timestamp</div>
+      </div>
+
+      <div class="callout callout-success">
+        <span class="callout-icon">⚡</span>
+        <div class="callout-text">
+          <div class="callout-title">Optimistic UI Update</div>
+          <p><code>handleGroupUpdated</code> in <code>LabelingPage.tsx</code> updates local component
+          state immediately upon successful API response — without triggering a full data refetch.
+          This keeps the analyst workflow fast and responsive, particularly important when triaging
+          large queues.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">🔁</span>
+        <div class="callout-text">
+          <div class="callout-title">Feedback Loop to Evolution Agent</div>
+          <p>Each submitted verdict is consumed by <strong>Agent 5 (Evolution Agent)</strong> during
+          recalibration runs. The agent uses the delta between <code>predicted_verdict</code>
+          (auto-label) and <code>analyst_verdict</code> (ground truth) to adjust detection rule
+          thresholds. A large divergence on a specific rule triggers threshold re-tuning for that
+          rule.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION 9 — KNOWN ISSUES
+    ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="s9">
+      <div class="section-header">
+        <div class="section-num">9</div>
+        <h2>Known Issues &amp; Tech Debt</h2>
+      </div>
+
+      <p>
+        The following issues are tracked and understood. Each entry includes the affected location,
+        current status, and recommended resolution path.
+      </p>
+
+      <div class="issues-grid">
+
+        <div class="issue-card">
+          <div>
+            <div class="issue-title">Score Scale Mixed (0–1 vs 0–100) in Database</div>
+            <div class="issue-loc">seed_rich_alerts.py (seeded) ↔ LLM agents (0–1 float)</div>
+            <div class="issue-desc">
+              Seeded alerts use integer 0–100 scores; LLM-triaged alerts use float 0–1 scores.
+              Both coexist in the same SQLite columns. UI normalises at render time via
+              <code>score &gt; 1 ? score : score * 100</code>, but this does not fix the underlying
+              data. Long-term fix: write a migration to standardise all seeded scores to 0–1 floats.
+            </div>
+          </div>
+          <div class="issue-status"><span class="status-badge sb-partial">UI Fixed Only</span></div>
+        </div>
+
+        <div class="issue-card">
+          <div>
+            <div class="issue-title">Batch Triage Times Out Through Cloudflare Tunnel</div>
+            <div class="issue-loc">main.py:376 — 200 concurrent LLM calls</div>
+            <div class="issue-desc">
+              When triggering a full batch triage (all PENDING alerts), the system fires up to 200
+              concurrent <code>asyncio.to_thread</code> LLM calls. Cloudflare's 100-second request
+              timeout kills the connection before the batch completes. Fix options: (1) reduce batch
+              size to ≤50 alerts per call, or (2) implement an async background job pattern with
+              polling endpoint so the client doesn't need to hold the connection open.
+            </div>
+          </div>
+          <div class="issue-status"><span class="status-badge sb-needs">Needs Fix</span></div>
+        </div>
+
+        <div class="issue-card">
+          <div>
+            <div class="issue-title">In-Memory Registry Not Persisted — Restart Requires DB Reload</div>
+            <div class="issue-loc">main.py:62–74 — _alert_registry dict</div>
+            <div class="issue-desc">
+              The in-memory <code>_alert_registry</code> is populated from SQLite on startup. Any
+              PENDING alerts added after startup (e.g. via API during runtime) live only in memory
+              and are invisible after a backend restart until a DB reload is triggered. This is
+              <em>by design</em> for the demo context, but could cause silent data loss in a
+              production environment with high-frequency alert generation.
+            </div>
+          </div>
+          <div class="issue-status"><span class="status-badge sb-design">By Design</span></div>
+        </div>
+
+        <div class="issue-card">
+          <div>
+            <div class="issue-title">Dashboard Stats Don't Auto-Poll</div>
+            <div class="issue-loc">DashboardPage.tsx:44 — single fetch on mount</div>
+            <div class="issue-desc">
+              Dashboard statistics (alert counts, pipeline status, verdict distribution) are fetched
+              once on component mount and never refreshed. If alerts are being triaged in the
+              background while the analyst is viewing the dashboard, numbers will be stale until
+              manual page refresh. Fix: add a <code>setInterval</code> polling hook (e.g. 10s) or
+              a WebSocket push.
+            </div>
+          </div>
+          <div class="issue-status"><span class="status-badge sb-needs">Needs Fix</span></div>
+        </div>
+
+        <div class="issue-card">
+          <div>
+            <div class="issue-title">Demo Reset Clears Memory Only — Not SQLite DB</div>
+            <div class="issue-loc">main.py:138–149 — reset endpoint</div>
+            <div class="issue-desc">
+              The demo reset endpoint flushes <code>_alert_registry</code> in memory but does not
+              execute a <code>DELETE FROM alerts</code> in SQLite. On next startup, the DB-populated
+              registry will re-load the supposedly "reset" alerts. Fix: have the reset endpoint also
+              wipe the SQLite table, or document clearly that a full reset requires both the endpoint
+              call AND manual DB deletion.
+            </div>
+          </div>
+          <div class="issue-status"><span class="status-badge sb-design">By Design</span></div>
+        </div>
+
+      </div>
+
+      <div class="callout callout-warn">
+        <span class="callout-icon">🔧</span>
+        <div class="callout-text">
+          <div class="callout-title">Priority Fix Order</div>
+          <p>
+            <strong>1st — Batch timeout</strong> (blocks full pipeline runs) →
+            <strong>2nd — Dashboard polling</strong> (analyst experience) →
+            <strong>3rd — Score normalisation migration</strong> (data integrity) →
+            <strong>4th — Memory/DB divergence</strong> (production hardening)
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION 10 — SEED SCRIPTS
+    ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="s10">
+      <div class="section-header">
+        <div class="section-num">10</div>
+        <h2>Seed Scripts</h2>
+      </div>
+
+      <p>
+        Three seed scripts control the initial state of the database. All must be run from the
+        <code>backend/</code> directory. Append <code>--clear</code> to any script to wipe
+        existing alerts before seeding.
+      </p>
+
+      <div class="seed-grid">
+
+        <div class="seed-card">
+          <code class="seed-cmd">python scripts/seed_rich_alerts.py</code>
+          <div class="seed-desc">
+            Seeds alerts with pre-built triage results and analyst verdicts already assigned.
+            Use this to populate a demonstration-ready state with fully labelled data for
+            the Evolution Agent to consume.
+          </div>
+          <div class="seed-output">
+            <span class="status-pill s-complete">COMPLETE</span>
+            <span>+ labels pre-assigned</span>
+          </div>
+        </div>
+
+        <div class="seed-card">
+          <code class="seed-cmd">python scripts/seed_rich_alerts.py --raw</code>
+          <div class="seed-desc">
+            Seeds bare alerts with no triage data. Use this to test the full AI pipeline
+            end-to-end — alerts will sit as PENDING until the triage batch endpoint is called.
+          </div>
+          <div class="seed-output">
+            <span class="status-pill s-pending">PENDING</span>
+            <span>+ queued for AI pipeline</span>
+          </div>
+        </div>
+
+        <div class="seed-card">
+          <code class="seed-cmd">python scripts/seed_baseline.py</code>
+          <div class="seed-desc">
+            Full 25k transaction scan followed by a first Evolution Agent run. Establishes the
+            initial detection baseline. Use this for initial deployment or after a full database
+            wipe to create a production-ready starting state.
+          </div>
+          <div class="seed-output">
+            <span class="status-pill s-complete">COMPLETE</span>
+            <span>+ first evolution baseline</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="code-block"><span class="cmt"># Run from backend/ directory</span>
+<span class="fn">cd</span> backend/
+
+<span class="cmt"># Option 1: Seed with pre-labelled demo data</span>
+<span class="fn">python</span> scripts/seed_rich_alerts.py
+
+<span class="cmt"># Option 2: Seed raw PENDING alerts for pipeline testing</span>
+<span class="fn">python</span> scripts/seed_rich_alerts.py <span class="kw">--raw</span>
+
+<span class="cmt"># Option 3: Full baseline scan + Evolution Agent run #1</span>
+<span class="fn">python</span> scripts/seed_baseline.py
+
+<span class="cmt"># Add --clear to any command to wipe existing alerts first</span>
+<span class="fn">python</span> scripts/seed_rich_alerts.py <span class="kw">--clear</span>
+<span class="fn">python</span> scripts/seed_baseline.py <span class="kw">--clear</span></div>
+
+      <div class="callout callout-danger">
+        <span class="callout-icon">🗑️</span>
+        <div class="callout-text">
+          <div class="callout-title">Warning: --clear is irreversible</div>
+          <p>The <code>--clear</code> flag deletes all rows from the alerts table in SQLite before
+          seeding. There is no confirmation prompt and no backup is taken. In a demo or staging
+          environment this is acceptable, but ensure no analyst-submitted verdicts need to be
+          preserved before running with this flag.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         SECTION 11 — EVOLUTION AGENT & RECALIBRATION LOOP
+    ══════════════════════════════════════════════════════════ -->
+    <section class="section" id="s11">
+      <div class="section-header">
+        <div class="section-num" style="background:linear-gradient(135deg,#1a4a23,#3fb950);">11</div>
+        <h2>Evolution Agent &amp; Recalibration Loop — Next Steps</h2>
+      </div>
+
+      <p>
+        The Evolution Agent closes the feedback loop between analyst verdicts and the detection engine.
+        The changes below extend the existing Agent 5 concept into a fully operational recalibration
+        system with per-rule threshold learning, iteration tracking, and a one-click UI trigger.
+        Everything described here is
+        <span class="tag tag-orange" style="display:inline-flex;vertical-align:middle;">Planned / In Progress</span>
+        unless otherwise noted.
+      </p>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">🔁</span>
+        <div class="callout-text">
+          <div class="callout-title">How the Loop Works</div>
+          <p>
+            Analyst verdicts accumulate in SQLite →
+            <strong>/recalibrate</strong> computes new per-rule FP/TP thresholds from observed label
+            distributions → thresholds are written to the <code>rule_weights</code> table →
+            <strong>Agent 0</strong> loads the new thresholds on its next run →
+            <strong>/recalibrate-and-relabel</strong> does all of the above then immediately re-scores
+            every <code>AUTO_UNCERTAIN</code> alert with the updated thresholds →
+            <code>autolabel_runs</code> records each iteration's statistics for trend visualisation.
+          </p>
+        </div>
+      </div>
+
+      <!-- 11.1 ── New Backend Endpoints -->
+      <div class="sub-heading">
+        <span class="accent-bar" style="background:linear-gradient(to bottom,var(--accent),var(--purple));"></span>
+        11.1 — New Backend Endpoints
+      </div>
+
+      <div class="two-col-grid">
+
+        <!-- POST /recalibrate -->
+        <div class="card" style="border-color:rgba(88,166,255,0.3);">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <span class="tag tag-blue" style="font-family:monospace;font-size:12px;">POST</span>
+            <code style="color:var(--accent);font-size:14px;font-weight:700;">/recalibrate</code>
+          </div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+            Reads all alerts with an <code>analyst_verdict</code>, groups them by triggering rule,
+            and computes observed FP and TP rates per rule. Writes the resulting thresholds to the
+            new <code>rule_weights</code> table. Does <strong>not</strong> re-run auto-label.
+          </p>
+          <div class="code-block" style="margin-bottom:0;"><span class="cmt">// Response shape</span>
+{
+  <span class="str">"status"</span>: <span class="str">"ok"</span>,
+  <span class="str">"rules_updated"</span>: <span class="num">8</span>,
+  <span class="str">"run_id"</span>: <span class="str">"evo_run_003"</span>,
+  <span class="str">"thresholds"</span>: {
+    <span class="str">"RULE_HV"</span>: {
+      <span class="str">"fp_threshold"</span>: <span class="num">0.61</span>,
+      <span class="str">"tp_threshold"</span>: <span class="num">0.28</span>
+    },
+    <span class="str">"RULE_DORMANT"</span>: {
+      <span class="str">"fp_threshold"</span>: <span class="num">0.55</span>,
+      <span class="str">"tp_threshold"</span>: <span class="num">0.22</span>
+    },
+    <span class="cmt">// ... one entry per rule</span>
+  }
+}</div>
+        </div>
+
+        <!-- POST /recalibrate-and-relabel -->
+        <div class="card" style="border-color:rgba(63,185,80,0.3);">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <span class="tag tag-green" style="font-family:monospace;font-size:12px;">POST</span>
+            <code style="color:var(--green);font-size:14px;font-weight:700;">/recalibrate-and-relabel</code>
+          </div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
+            Atomic two-step operation: runs <code>/recalibrate</code> first, then immediately
+            re-executes Agent 0 auto-label on all <code>AUTO_UNCERTAIN</code> alerts using the
+            freshly written per-rule thresholds. Returns before/after counts so the UI can render
+            the shrink delta.
+          </p>
+          <div class="code-block" style="margin-bottom:0;"><span class="cmt">// Response shape</span>
+{
+  <span class="str">"status"</span>: <span class="str">"ok"</span>,
+  <span class="str">"run_id"</span>: <span class="str">"evo_run_003"</span>,
+  <span class="str">"before"</span>: {
+    <span class="str">"auto_fp"</span>: <span class="num">142</span>,
+    <span class="str">"auto_tp"</span>: <span class="num">87</span>,
+    <span class="str">"uncertain"</span>: <span class="num">203</span>
+  },
+  <span class="str">"after"</span>: {
+    <span class="str">"auto_fp"</span>: <span class="num">168</span>,
+    <span class="str">"auto_tp"</span>: <span class="num">109</span>,
+    <span class="str">"uncertain"</span>: <span class="num">155</span>
+  },
+  <span class="str">"relabeled_count"</span>: <span class="num">48</span>
+}</div>
+        </div>
+
+      </div>
+
+      <!-- 11.2 ── New DB Tables -->
+      <div class="sub-heading">
+        <span class="accent-bar" style="background:linear-gradient(to bottom,var(--orange),var(--yellow));"></span>
+        11.2 — New Database Tables
+      </div>
+
+      <div class="two-col-grid">
+
+        <!-- rule_weights -->
+        <div class="card">
+          <div style="font-size:13px;font-weight:700;color:var(--teal);font-family:monospace;margin-bottom:10px;">📋 rule_weights</div>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+            Stores per-rule thresholds computed by each recalibration run. Agent 0 reads the most
+            recent row per rule on startup. Falls back to global defaults
+            (<code>fp ≥ 0.65 / tp ≤ 0.25</code>) if the table is empty or a rule has no data.
+          </p>
+          <div class="code-block" style="margin-bottom:0;font-size:11px;"><span class="kw">CREATE TABLE</span> rule_weights (
+  id               INTEGER <span class="kw">PRIMARY KEY</span>,
+  run_id           TEXT    <span class="kw">NOT NULL</span>,
+  rule_id          TEXT    <span class="kw">NOT NULL</span>,  <span class="cmt">-- e.g. "RULE_HV"</span>
+  fp_threshold     REAL    <span class="kw">NOT NULL</span>,  <span class="cmt">-- above → AUTO_FP</span>
+  tp_threshold     REAL    <span class="kw">NOT NULL</span>,  <span class="cmt">-- below → AUTO_TP</span>
+  sample_size      INTEGER <span class="kw">NOT NULL</span>,  <span class="cmt">-- labeled alerts used</span>
+  observed_fp_rate REAL,              <span class="cmt">-- raw FP% in sample</span>
+  created_at       TEXT <span class="kw">DEFAULT</span> (datetime(<span class="str">'now'</span>))
+);</div>
+        </div>
+
+        <!-- autolabel_runs -->
+        <div class="card">
+          <div style="font-size:13px;font-weight:700;color:var(--purple);font-family:monospace;margin-bottom:10px;">📊 autolabel_runs</div>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+            Records a snapshot of FP / TP / UNCERTAIN counts after every Agent 0 execution. Each
+            row is one iteration. Used by the Evolution page to render the trend line and
+            uncertain-shrink bar chart across runs.
+          </p>
+          <div class="code-block" style="margin-bottom:0;font-size:11px;"><span class="kw">CREATE TABLE</span> autolabel_runs (
+  id              INTEGER <span class="kw">PRIMARY KEY</span>,
+  run_id          TEXT    <span class="kw">NOT NULL</span>,  <span class="cmt">-- e.g. "evo_run_003"</span>
+  triggered_by    TEXT,              <span class="cmt">-- "startup"|"recalibrate"|"manual"</span>
+  auto_fp_count   INTEGER <span class="kw">NOT NULL</span>,
+  auto_tp_count   INTEGER <span class="kw">NOT NULL</span>,
+  uncertain_count INTEGER <span class="kw">NOT NULL</span>,
+  total_labeled   INTEGER <span class="kw">NOT NULL</span>, <span class="cmt">-- analyst verdicts available</span>
+  created_at      TEXT <span class="kw">DEFAULT</span> (datetime(<span class="str">'now'</span>))
+);</div>
+        </div>
+
+      </div>
+
+      <!-- 11.3 ── Agent 0 Changes -->
+      <div class="sub-heading">
+        <span class="accent-bar" style="background:linear-gradient(to bottom,var(--teal),var(--accent));"></span>
+        11.3 — Agent 0 Modifications (<code style="font-size:13px;">agent0_autolabel.py</code>)
+      </div>
+
+      <p style="margin-bottom:16px;">
+        Agent 0's scoring logic is unchanged — the heuristic weight table
+        (+0.50 / +0.30 / +0.20 / +0.10) remains identical. Only the
+        <strong>classification threshold step</strong> is updated to be rule-aware.
+      </p>
+
+      <div class="two-col-grid">
+
+        <div class="card" style="border-color:rgba(248,81,73,0.2);">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--red);margin-bottom:10px;">Before — Global Thresholds</div>
+          <div class="code-block" style="margin-bottom:0;font-size:11px;"><span class="cmt"># Hard-coded globals — same for all rules</span>
+FP_THRESHOLD = <span class="num">0.65</span>
+TP_THRESHOLD = <span class="num">0.25</span>
+
+<span class="kw">if</span> fp_probability >= FP_THRESHOLD:
+    verdict = <span class="str">"AUTO_FP"</span>
+<span class="kw">elif</span> fp_probability <= TP_THRESHOLD:
+    verdict = <span class="str">"AUTO_TP"</span>
+<span class="kw">else</span>:
+    verdict = <span class="str">"AUTO_UNCERTAIN"</span></div>
+        </div>
+
+        <div class="card" style="border-color:rgba(63,185,80,0.2);">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--green);margin-bottom:10px;">After — Per-Rule Thresholds</div>
+          <div class="code-block" style="margin-bottom:0;font-size:11px;"><span class="cmt"># Load from rule_weights, fallback to globals</span>
+weights = <span class="fn">load_rule_weights</span>(db, rule_id)
+fp_t = weights.fp_threshold <span class="kw">or</span> <span class="num">0.65</span>
+tp_t = weights.tp_threshold <span class="kw">or</span> <span class="num">0.25</span>
+
+<span class="kw">if</span> fp_probability >= fp_t:
+    verdict = <span class="str">"AUTO_FP"</span>
+<span class="kw">elif</span> fp_probability <= tp_t:
+    verdict = <span class="str">"AUTO_TP"</span>
+<span class="kw">else</span>:
+    verdict = <span class="str">"AUTO_UNCERTAIN"</span></div>
+        </div>
+
+      </div>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">🔁</span>
+        <div class="callout-text">
+          <div class="callout-title">Fallback Behaviour</div>
+          <p>If <code>rule_weights</code> is empty (fresh install, or no recalibration run yet),
+          Agent 0 silently falls back to the global thresholds (<code>0.65 / 0.25</code>). This
+          means the system is always functional even before any analyst verdicts have been submitted.
+          No configuration change is required after a fresh seed.</p>
+        </div>
+      </div>
+
+      <!-- 11.4 ── Evolution Page Frontend -->
+      <div class="sub-heading">
+        <span class="accent-bar" style="background:linear-gradient(to bottom,var(--purple),var(--red));"></span>
+        11.4 — Evolution Page Frontend Components (<code style="font-size:13px;">src/pages/EvolutionPage.tsx</code>)
+      </div>
+
+      <p style="margin-bottom:20px;">
+        The Evolution page gains three new panels. All data is fetched from the new endpoints on
+        mount, with a manual refresh triggered by the Recalibrate &amp; Re-label button.
+      </p>
+
+      <!-- Loop Progress Panel -->
+      <div class="card" style="margin-bottom:16px;border-color:rgba(188,140,255,0.25);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:2px;">📈 Loop Progress Panel</div>
+            <div style="font-size:12px;color:var(--text-muted);">FP rate trend per rule + uncertain-shrink bar across recalibration iterations</div>
+          </div>
+          <span class="tag tag-purple">New Component</span>
+        </div>
+
+        <!-- FP Rate Trend -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);margin-bottom:14px;">FP Rate Trend — Per Rule (mock preview)</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px;">
+                <span><code style="color:var(--orange);">RULE_HV</code></span>
+                <span>Run 1 → Run 2 → Run 3</span>
+              </div>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;"><div style="width:72%;height:100%;background:linear-gradient(90deg,var(--red),var(--orange));border-radius:4px;"></div></div>
+                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;"><div style="width:61%;height:100%;background:linear-gradient(90deg,var(--orange),var(--yellow));border-radius:4px;"></div></div>
+                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;"><div style="width:55%;height:100%;background:linear-gradient(90deg,var(--yellow),var(--green));border-radius:4px;"></div></div>
+                <span style="font-size:11px;color:var(--green);min-width:32px;text-align:right;">55%</span>
+              </div>
+            </div>
+
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px;">
+                <span><code style="color:var(--orange);">RULE_DORMANT</code></span>
+              </div>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;"><div style="width:38%;height:100%;background:linear-gradient(90deg,var(--yellow),var(--green));border-radius:4px;"></div></div>
+                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;"><div style="width:34%;height:100%;background:linear-gradient(90deg,var(--green),var(--teal));border-radius:4px;"></div></div>
+                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;"><div style="width:30%;height:100%;background:var(--green);border-radius:4px;"></div></div>
+                <span style="font-size:11px;color:var(--green);min-width:32px;text-align:right;">30%</span>
+              </div>
+            </div>
+
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px;">
+                <span><code style="color:var(--orange);">RULE_FOREIGN_WIRE</code></span>
+              </div>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;"><div style="width:81%;height:100%;background:var(--red);border-radius:4px;"></div></div>
+                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;"><div style="width:74%;height:100%;background:linear-gradient(90deg,var(--red),var(--orange));border-radius:4px;"></div></div>
+                <div style="flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;"><div style="width:70%;height:100%;background:linear-gradient(90deg,var(--orange),var(--yellow));border-radius:4px;"></div></div>
+                <span style="font-size:11px;color:var(--yellow);min-width:32px;text-align:right;">70%</span>
+              </div>
+            </div>
+
+          </div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:10px;">
+            Each bar segment = one recalibration run &nbsp;|&nbsp; Colour = magnitude &nbsp;|&nbsp; Right value = latest rate
+          </div>
+        </div>
+
+        <!-- Uncertain shrink bars -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);margin-bottom:14px;">AUTO_UNCERTAIN Shrink — Per Iteration (mock preview)</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+
+            <div style="display:grid;grid-template-columns:60px 1fr 80px;align-items:center;gap:10px;font-size:12px;">
+              <span style="color:var(--text-muted);">Run 1</span>
+              <div style="display:flex;height:20px;border-radius:4px;overflow:hidden;gap:2px;">
+                <div style="flex:142;background:rgba(63,185,80,0.5);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;">142 FP</div>
+                <div style="flex:203;background:rgba(210,153,34,0.5);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;">203 UNC</div>
+                <div style="flex:87;background:rgba(248,81,73,0.5);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;">87 TP</div>
+              </div>
+              <span style="font-size:11px;color:var(--yellow);">432 total</span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:60px 1fr 80px;align-items:center;gap:10px;font-size:12px;">
+              <span style="color:var(--text-muted);">Run 2</span>
+              <div style="display:flex;height:20px;border-radius:4px;overflow:hidden;gap:2px;">
+                <div style="flex:168;background:rgba(63,185,80,0.6);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;">168 FP</div>
+                <div style="flex:155;background:rgba(210,153,34,0.6);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;">155 UNC</div>
+                <div style="flex:109;background:rgba(248,81,73,0.6);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;">109 TP</div>
+              </div>
+              <span style="font-size:11px;color:var(--yellow);">432 total</span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:60px 1fr 80px;align-items:center;gap:10px;font-size:12px;">
+              <span style="color:var(--text-muted);">Run 3</span>
+              <div style="display:flex;height:20px;border-radius:4px;overflow:hidden;gap:2px;">
+                <div style="flex:189;background:rgba(63,185,80,0.75);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;">189 FP</div>
+                <div style="flex:118;background:rgba(210,153,34,0.75);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;">118 UNC</div>
+                <div style="flex:125;background:rgba(248,81,73,0.75);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:700;">125 TP</div>
+              </div>
+              <span style="font-size:11px;color:var(--green);">432 total</span>
+            </div>
+
+          </div>
+          <div style="font-size:10px;color:var(--text-dim);margin-top:10px;">
+            UNCERTAIN count shrinks as more analyst verdicts accumulate and thresholds tighten.
+            FP + TP counts grow correspondingly — total alert count is fixed.
+          </div>
+        </div>
+      </div>
+
+      <!-- Weight Diff Table -->
+      <div class="card" style="margin-bottom:16px;border-color:rgba(57,208,200,0.25);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:2px;">⚖️ Weight Diff Table</div>
+            <div style="font-size:12px;color:var(--text-muted);">Rule-by-rule threshold changes between the last two recalibration runs</div>
+          </div>
+          <span class="tag tag-teal">New Component</span>
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Rule</th>
+              <th>Old FP Thresh</th>
+              <th>New FP Thresh</th>
+              <th>Old TP Thresh</th>
+              <th>New TP Thresh</th>
+              <th>Sample n</th>
+              <th>Observed FP Rate</th>
+              <th>Delta</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="rule-code">RULE_HV</span></td>
+              <td style="font-family:monospace;">0.65</td>
+              <td style="color:var(--teal);font-family:monospace;font-weight:700;">0.61</td>
+              <td style="font-family:monospace;">0.25</td>
+              <td style="color:var(--teal);font-family:monospace;font-weight:700;">0.28</td>
+              <td style="font-family:monospace;">184</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <div class="score-bar-track" style="width:60px;"><div class="score-bar-fill" style="width:55%;background:var(--yellow);"></div></div>
+                  <span style="font-size:11px;color:var(--yellow);">55%</span>
+                </div>
+              </td>
+              <td><span class="tag tag-teal" style="font-family:monospace;">↓ −0.04</span></td>
+            </tr>
+            <tr>
+              <td><span class="rule-code">RULE_DORMANT</span></td>
+              <td style="font-family:monospace;">0.65</td>
+              <td style="color:var(--green);font-family:monospace;font-weight:700;">0.55</td>
+              <td style="font-family:monospace;">0.25</td>
+              <td style="color:var(--green);font-family:monospace;font-weight:700;">0.22</td>
+              <td style="font-family:monospace;">67</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <div class="score-bar-track" style="width:60px;"><div class="score-bar-fill" style="width:30%;background:var(--green);"></div></div>
+                  <span style="font-size:11px;color:var(--green);">30%</span>
+                </div>
+              </td>
+              <td><span class="tag tag-green" style="font-family:monospace;">↓ −0.10</span></td>
+            </tr>
+            <tr>
+              <td><span class="rule-code">RULE_FOREIGN_WIRE</span></td>
+              <td style="font-family:monospace;">0.65</td>
+              <td style="color:var(--orange);font-family:monospace;font-weight:700;">0.70</td>
+              <td style="font-family:monospace;">0.25</td>
+              <td style="color:var(--orange);font-family:monospace;font-weight:700;">0.30</td>
+              <td style="font-family:monospace;">93</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <div class="score-bar-track" style="width:60px;"><div class="score-bar-fill" style="width:70%;background:var(--orange);"></div></div>
+                  <span style="font-size:11px;color:var(--orange);">70%</span>
+                </div>
+              </td>
+              <td><span class="tag tag-orange" style="font-family:monospace;">↑ +0.05</span></td>
+            </tr>
+            <tr>
+              <td><span class="rule-code">RULE_CRYPTO</span></td>
+              <td style="font-family:monospace;">0.65</td>
+              <td style="font-family:monospace;color:var(--text-muted);">0.65</td>
+              <td style="font-family:monospace;">0.25</td>
+              <td style="font-family:monospace;color:var(--text-muted);">0.25</td>
+              <td style="font-family:monospace;color:var(--text-dim);">12</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <div class="score-bar-track" style="width:60px;"><div class="score-bar-fill" style="width:50%;background:var(--text-dim);"></div></div>
+                  <span style="font-size:11px;color:var(--text-dim);">50%</span>
+                </div>
+              </td>
+              <td><span class="tag tag-muted" style="font-family:monospace;">— no change</span></td>
+            </tr>
+            <tr>
+              <td><span class="rule-code">RULE_PEP</span></td>
+              <td style="font-family:monospace;">0.65</td>
+              <td style="font-family:monospace;color:var(--text-dim);font-style:italic;">fallback</td>
+              <td style="font-family:monospace;">0.25</td>
+              <td style="font-family:monospace;color:var(--text-dim);font-style:italic;">fallback</td>
+              <td style="font-family:monospace;color:var(--text-dim);">3</td>
+              <td><span style="font-size:11px;color:var(--text-dim);">insufficient data</span></td>
+              <td><span class="tag tag-muted">⚠ low n</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout callout-warn" style="margin-top:16px;margin-bottom:0;">
+          <span class="callout-icon">📊</span>
+          <div class="callout-text">
+            <div class="callout-title">Minimum Sample Size</div>
+            <p>Rules with fewer than <strong>~15 labeled alerts</strong> (e.g. <code>RULE_PEP</code>,
+            <code>RULE_DECEASED</code>) will not have enough data to compute reliable thresholds.
+            Agent 0 uses the global fallback for these rules and the table shows
+            <em>"insufficient data"</em>. The minimum sample size should be made configurable.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recalibrate Button -->
+      <div class="card" style="border-color:rgba(63,185,80,0.3);margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:2px;">🚀 "Recalibrate &amp; Re-label" Button</div>
+            <div style="font-size:12px;color:var(--text-muted);">One-click trigger for the full recalibration loop — calls <code>POST /recalibrate-and-relabel</code></div>
+          </div>
+          <span class="tag tag-green">New Component</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+          <div style="background:linear-gradient(135deg,rgba(63,185,80,0.2),rgba(57,208,200,0.2));border:1px solid rgba(63,185,80,0.5);border-radius:var(--radius);padding:12px 24px;font-size:14px;font-weight:700;color:var(--green);display:flex;align-items:center;gap:8px;box-shadow:0 0 20px rgba(63,185,80,0.1);">
+            🧬 Recalibrate &amp; Re-label
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);max-width:380px;">
+            Disabled while a triage batch is running. Shows a spinner and live count during execution.
+            On completion, all three panels refresh automatically.
+          </div>
+        </div>
+
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-dim);margin-bottom:10px;">Button State Machine</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;">
+            <div style="padding:6px 12px;border-radius:6px;background:rgba(63,185,80,0.12);color:var(--green);border:1px solid rgba(63,185,80,0.3);font-weight:600;">IDLE — Ready</div>
+            <span style="color:var(--text-dim);">→ click →</span>
+            <div style="padding:6px 12px;border-radius:6px;background:rgba(210,153,34,0.12);color:var(--yellow);border:1px solid rgba(210,153,34,0.3);font-weight:600;">LOADING — Recalibrating…</div>
+            <span style="color:var(--text-dim);">→ success →</span>
+            <div style="padding:6px 12px;border-radius:6px;background:rgba(88,166,255,0.12);color:var(--accent);border:1px solid rgba(88,166,255,0.3);font-weight:600;">DONE — 48 re-labeled ✓</div>
+            <span style="color:var(--text-dim);">→ 3s →</span>
+            <div style="padding:6px 12px;border-radius:6px;background:rgba(63,185,80,0.12);color:var(--green);border:1px solid rgba(63,185,80,0.3);font-weight:600;">IDLE — Ready</div>
+          </div>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-size:12px;">
+            <span style="color:var(--text-dim);">On error:</span>
+            <div style="padding:6px 12px;border-radius:6px;background:rgba(248,81,73,0.12);color:var(--red);border:1px solid rgba(248,81,73,0.3);font-weight:600;">ERROR — Retry?</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 11.5 ── Implementation Notes -->
+      <div class="sub-heading">
+        <span class="accent-bar" style="background:linear-gradient(to bottom,var(--yellow),var(--orange));"></span>
+        11.5 — Implementation Notes &amp; Caveats
+      </div>
+
+      <div class="issues-grid">
+
+        <div class="issue-card">
+          <div>
+            <div class="issue-title">Minimum Labeled Alerts Required Before Recalibration Is Useful</div>
+            <div class="issue-loc">POST /recalibrate — threshold computation logic</div>
+            <div class="issue-desc">
+              Recalibration produces meaningful thresholds only when sufficient analyst verdicts have
+              been submitted. Recommendation: require at least <strong>30 total labeled alerts</strong>
+              (across all rules) before enabling the button, and at least <strong>15 per rule</strong>
+              for that rule's threshold to update. Surface in the UI:
+              <em>"23 / 30 verdicts needed to unlock recalibration."</em>
+            </div>
+          </div>
+          <div class="issue-status"><span class="status-badge sb-todo">To Implement</span></div>
+        </div>
+
+        <div class="issue-card">
+          <div>
+            <div class="issue-title">Re-label Scope: AUTO_UNCERTAIN Only</div>
+            <div class="issue-loc">POST /recalibrate-and-relabel — Agent 0 re-run scope</div>
+            <div class="issue-desc">
+              The endpoint re-runs Agent 0 only on <code>AUTO_UNCERTAIN</code> alerts to avoid
+              churning stable classifications. A full re-label (all COMPLETE alerts) can be triggered
+              via a planned <code>?scope=all</code> query parameter if a threshold change is large
+              enough to warrant it.
+            </div>
+          </div>
+          <div class="issue-status"><span class="status-badge sb-design">By Design</span></div>
+        </div>
+
+        <div class="issue-card">
+          <div>
+            <div class="issue-title">Threshold History Is Append-Only</div>
+            <div class="issue-loc">rule_weights table — no UPDATE, only INSERT</div>
+            <div class="issue-desc">
+              Each recalibration run inserts new rows rather than updating existing ones. Agent 0
+              always reads the row with the latest <code>created_at</code> per rule. This gives a
+              full audit trail and allows rollback by deleting the most recent run's rows.
+              Do not add <code>ON CONFLICT REPLACE</code> — it would destroy the history.
+            </div>
+          </div>
+          <div class="issue-status"><span class="status-badge sb-design">By Design</span></div>
+        </div>
+
+        <div class="issue-card">
+          <div>
+            <div class="issue-title">Dashboard Page Needs autolabel_runs Hook</div>
+            <div class="issue-loc">DashboardPage.tsx — existing single-fetch stats</div>
+            <div class="issue-desc">
+              The existing dashboard fetch (single mount, no polling — see Section 9) also needs to
+              read from <code>autolabel_runs</code> to display the current run iteration number and
+              total uncertain count. Add a <code>GET /api/evolution/summary</code> endpoint returning
+              the latest run stats, included in the dashboard mount fetch.
+            </div>
+          </div>
+          <div class="issue-status"><span class="status-badge sb-todo">To Implement</span></div>
+        </div>
+
+      </div>
+
+      <!-- 11.6 ── Updated Data Flow -->
+      <div class="sub-heading">
+        <span class="accent-bar" style="background:linear-gradient(to bottom,var(--accent),var(--green));"></span>
+        11.6 — Updated End-to-End Data Flow (with Recalibration)
+      </div>
+
+      <div class="flow">
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--border2);">
+            <span class="flow-icon">💾</span>
+            <span>Raw Transactions → Rule Engine → Alert PENDING</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:12px;">unchanged — see §2</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--purple);">
+            <span class="flow-icon">🤖</span>
+            <span>4-Agent Triage → Alert COMPLETE</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:12px;">unchanged — see §4</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--teal);">
+            <span class="flow-icon">🏷</span>
+            <span>Agent 0 Auto-Label</span>
+            <span class="flow-badge" style="background:rgba(57,208,200,0.2);color:var(--teal);">rule_weights</span>
+          </div>
+          <span style="font-size:11px;color:var(--teal);margin-left:12px;">▲ now reads per-rule thresholds</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--accent);">
+            <span class="flow-icon">👤</span>
+            <span>Analyst Reviews → analyst_verdict</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-dim);margin-left:12px;">unchanged — see §8</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--green);">
+            <span class="flow-icon">🧬</span>
+            <span>POST /recalibrate-and-relabel</span>
+            <span class="flow-badge s-new">NEW</span>
+          </div>
+          <span style="font-size:11px;color:var(--green);margin-left:12px;">▲ one-click full loop trigger</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--orange);">
+            <span class="flow-icon">⚖️</span>
+            <span>rule_weights updated per rule</span>
+            <span class="flow-badge s-new">NEW</span>
+          </div>
+          <span style="font-size:11px;color:var(--orange);margin-left:12px;">▲ per-rule thresholds persisted</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--purple);">
+            <span class="flow-icon">🔄</span>
+            <span>Agent 0 re-runs on UNCERTAIN alerts</span>
+            <span class="flow-badge s-new">NEW</span>
+          </div>
+          <span style="font-size:11px;color:var(--purple);margin-left:12px;">▲ uncertain-shrink step</span>
+        </div>
+        <div class="flow-arrow"></div>
+
+        <div class="flow-node">
+          <div class="flow-box" style="border-color:var(--accent2);">
+            <span class="flow-icon">📊</span>
+            <span>autolabel_runs row inserted → UI refreshes</span>
+            <span class="flow-badge s-new">NEW</span>
+          </div>
+          <span style="font-size:11px;color:var(--accent);margin-left:12px;">▲ iteration tracking + trend viz</span>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ── FOOTER ── -->
+    <div class="report-footer">
+      <span>AML Alert Triage System — Technical Handover Report</span>
+      <span>React 19 + TypeScript · FastAPI + Python 3.13 · SQLite · AWS Bedrock</span>
+      <span>Internal Use Only · v1.0</span>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // Active nav highlight on scroll
+  const sections = document.querySelectorAll('.section[id]');
+  const navLinks  = document.querySelectorAll('.sidebar nav a');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = '#' + entry.target.id;
+        navLinks.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+
+  // Animate score bars on scroll into view
+  const bars = document.querySelectorAll('.score-bar-fill');
+  const barObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.style.transition = 'width 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
+      }
+    });
+  }, { threshold: 0.1 });
+
+  bars.forEach(bar => barObserver.observe(bar));
+</script>
+
+</body>
+</html>

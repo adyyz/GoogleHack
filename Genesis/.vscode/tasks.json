@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "Genesis: start API", "type": "shell", "command": "npm run api", "options": { "cwd": "${workspaceFolder}" }, "problemMatcher": [] },
+    { "label": "Genesis: frontend dev", "type": "shell", "command": "npm run dev", "options": { "cwd": "${workspaceFolder}" }, "problemMatcher": [] },
+    { "label": "Genesis: seed local dataset", "type": "shell", "command": "npm run seed", "options": { "cwd": "${workspaceFolder}" }, "problemMatcher": [] },
+    { "label": "Genesis: tests", "type": "shell", "command": "npm test", "options": { "cwd": "${workspaceFolder}" }, "problemMatcher": [] },
+    { "label": "Genesis: toolchain doctor", "type": "shell", "command": "npm run doctor", "options": { "cwd": "${workspaceFolder}" }, "problemMatcher": [] },
+    { "label": "Genesis: Firebase MCP smoke check", "type": "shell", "command": "npm run mcp:check", "options": { "cwd": "${workspaceFolder}" }, "problemMatcher": [] },
+    { "label": "Genesis: local emulator checks", "type": "shell", "command": "npm run emulators:check", "options": { "cwd": "${workspaceFolder}" }, "problemMatcher": [] },
+    { "label": "Genesis: start local emulators", "type": "shell", "command": "npm run emulators", "options": { "cwd": "${workspaceFolder}" }, "problemMatcher": [] }
+  ]
+}

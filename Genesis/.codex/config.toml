@@ -1,0 +1,9 @@
+# Open Genesis as the trusted project root, then restart Codex to load this server.
+# Use this project-local server OR the official Firebase plugin, not both.
+[mcp_servers.firebase]
+command = "powershell.exe"
+args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\\Users\\007ad\\VSCode\\GoogleHack\\Genesis\\scripts\\firebase.ps1", "mcp", "--dir", "C:\\Users\\007ad\\VSCode\\GoogleHack\\Genesis", "--only", "auth,firestore"]
+cwd = "C:\\Users\\007ad\\VSCode\\GoogleHack\\Genesis"
+startup_timeout_sec = 30
+tool_timeout_sec = 60
+default_tools_approval_mode = "prompt"
