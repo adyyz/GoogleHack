@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "analytical_snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataset_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "transactions",
       "queryScope": "COLLECTION",
       "fields": [
@@ -145,9 +159,64 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "pipeline_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataset_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pipeline_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataset_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "kind",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pipeline_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataset_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "kind",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "state",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
+    {
+      "collectionGroup": "analytical_snapshots",
+      "fieldPath": "body",
+      "indexes": []
+    },
     {
       "collectionGroup": "step_runs",
       "fieldPath": "input_snapshot",
@@ -206,6 +275,11 @@
     {
       "collectionGroup": "simulations",
       "fieldPath": "candidate_case_detection",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "simulations",
+      "fieldPath": "metrics",
       "indexes": []
     }
   ]

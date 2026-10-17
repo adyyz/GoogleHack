@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Genesis resource setup and deployment guide</title>
+<style>
+  :root { color-scheme: light; --ink:#17243b; --muted:#627089; --paper:#f3f5f9; --line:#e2e7f0; --blue:#315dea; --nav:#101c31; --warning:#946019; }
+  * { box-sizing:border-box; }
+  html { scroll-padding-top:24px; scrollbar-color:#b6c1d3 #edf0f6; scrollbar-width:auto; }
+  body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.65 "Segoe UI",Arial,sans-serif; }
+  a { color:#2447b8; text-underline-offset:3px; }
+  a:hover { color:#132970; }
+  a:focus-visible, summary:focus-visible, input:focus-visible { outline:3px solid var(--blue); outline-offset:4px; }
+  .skip { position:absolute; top:-100px; left:16px; background:white; padding:10px; z-index:2; }
+  .skip:focus { top:10px; }
+  header { background:var(--nav); color:white; padding:48px max(24px,calc((100vw - 1280px)/2)); }
+  h1,h2,h3 { font-family:Bahnschrift,"Segoe UI",sans-serif; line-height:1.2; }
+  h1 { margin:14px 0 18px; max-width:850px; font-size:clamp(32px,4vw,52px); }
+  header p { max-width:880px; margin:12px 0; }
+  .eyebrow { text-transform:uppercase; letter-spacing:2px; font-size:13px; font-weight:700; color:#b8caff; }
+  .status { display:inline-block; border:1px solid #6a7a95; border-radius:6px; padding:5px 10px; font-size:13px; }
+  .shell { max-width:1328px; padding:32px 24px 64px; margin:auto; display:grid; grid-template-columns:240px minmax(0,1fr); gap:28px; }
+  nav { align-self:start; position:sticky; top:20px; padding:18px; border:1px solid var(--line); background:white; border-radius:12px; }
+  nav ol { padding-left:24px; margin:12px 0 0; }
+  nav li { margin:7px 0; font-size:14px; }
+  nav a { display:inline-block; padding:2px 0; }
+  main { min-width:0; }
+  section { background:white; border:1px solid var(--line); padding:28px; margin-bottom:24px; border-radius:12px; }
+  h2 { font-size:27px; margin:0 0 16px; }
+  h3 { font-size:20px; margin:24px 0 10px; }
+  p { margin:12px 0; }
+  li { margin:8px 0; }
+  .number { color:var(--blue); font-size:14px; font-weight:700; display:block; margin-bottom:8px; }
+  .note { border-left:4px solid var(--blue); background:#edf1ff; padding:14px 18px; margin:18px 0; }
+  .gate { border-left:4px solid #b47a17; background:#fff5e5; padding:16px 18px; margin:18px 0; }
+  .gate strong { color:#70480d; }
+  .small { color:var(--muted); font-size:14px; }
+  .table-scroll { overflow-x:auto; scrollbar-gutter:stable; margin:16px 0; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th,td { border-bottom:1px solid var(--line); padding:12px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--paper); }
+  code,pre { font-family:"Cascadia Code",Consolas,monospace; font-size:13px; }
+  code { overflow-wrap:anywhere; }
+  pre { background:#101c31; color:#e5edff; padding:18px; border-radius:8px; overflow:auto; white-space:pre; line-height:1.65; tab-size:2; }
+  pre code { overflow-wrap:normal; }
+  details { margin:16px 0; border:1px solid var(--line); border-radius:8px; padding:12px 16px; }
+  summary { cursor:pointer; font-weight:600; }
+  summary:hover { color:var(--blue); }
+  summary:active { color:#132970; }
+  label.check { display:flex; align-items:flex-start; gap:10px; margin:12px 0; padding:10px 0; border-top:1px solid var(--line); }
+  input[type=checkbox] { flex:none; width:19px; height:19px; margin-top:4px; accent-color:var(--blue); cursor:pointer; }
+  footer { color:var(--muted); font-size:14px; padding:0 8px; }
+  ::-webkit-scrollbar { width:12px; height:12px; }
+  ::-webkit-scrollbar-track { background:#edf0f6; }
+  ::-webkit-scrollbar-thumb { background:#b6c1d3; border:3px solid #edf0f6; border-radius:10px; }
+  ::-webkit-scrollbar-thumb:hover { background:#8b9bb4; }
+  ::-webkit-scrollbar-thumb:active { background:#6c7f9e; }
+  @media(max-width:900px) { .shell { grid-template-columns:minmax(0,1fr); padding:20px 14px; gap:20px; } nav { position:static; } nav ol { columns:2; } section { padding:22px 18px; } }
+  @media(max-width:480px) { nav ol { columns:1; } header { padding:32px 20px; } }
+  @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  @media(forced-colors:active) { html { scrollbar-color:auto; } .note,.gate,nav,section { border:1px solid CanvasText; } }
+  @media print { @page { margin:16mm; } body { background:white; font-size:11pt; } header { background:white; color:black; padding:0 0 16px; } .eyebrow { color:black; } .shell { display:block; padding:0; } nav { position:static; } nav ol { columns:2; } section { padding:14px 0; border:0; border-top:1px solid #777; border-radius:0; } pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#f1f1f1; color:black; } .table-scroll { overflow:visible; } th,td { overflow-wrap:anywhere; } h2,h3,summary { break-after:avoid; } tr,.gate,.note,label { break-inside:avoid; } .skip { display:none; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#overview">Skip to setup guide</a>
+<header>
+  <div class="eyebrow">Genesis / Deployment field guide</div>
+  <h1>One project. Named resources.<br>A clear setup order.</h1>
+  <p>Step-by-step preparation for the public web, private worker and Google integrations in <strong>genesis-aicb</strong>. Read from top to bottom; each step names its dependencies and verification evidence.</p>
+  <p><span class="status">PREPARATION ONLY / 17 October 2026</span></p>
+</header>
+<div class="shell">
+<nav aria-label="Setup steps">
+  <strong>Setup sequence</strong>
+  <ol start="0">
+    <li><a href="#overview">Scope and funding gates</a></li>
+    <li><a href="#names">Resource names</a></li>
+    <li><a href="#local">Local checks and tools</a></li>
+    <li><a href="#inventory">Project inventory</a></li>
+    <li><a href="#services">Required APIs</a></li>
+    <li><a href="#data">Firestore and publication</a></li>
+    <li><a href="#auth">Firebase operator sign-in</a></li>
+    <li><a href="#identities">Service identities and IAM</a></li>
+    <li><a href="#images">Build and store images</a></li>
+    <li><a href="#environment">Runtime configuration</a></li>
+    <li><a href="#worker">Deploy the private worker</a></li>
+    <li><a href="#queue">Create the paused queue</a></li>
+    <li><a href="#web">Deploy the public web</a></li>
+    <li><a href="#integration">Integrations and real evidence</a></li>
+    <li><a href="#handoff">Recovery and submission</a></li>
+  </ol>
+</nav>
+<main>
+<section id="overview">
+  <span class="number">00 / Read first</span>
+  <h2>Prepare now; execute after verification.</h2>
+  <p>This is an offline reference, not an installer. It sends no requests, executes no commands and saves no credentials. Checkboxes are temporary reading aids; record actual completion in the linked deployment checklist. Command sections start expanded; expand them before using browser Print to save a complete copy.</p>
+  <p><strong>Known:</strong> project <code>genesis-aicb</code>, number <code>638299117256</code>, has a linked billing account. Secret Manager already holds <code>testing_free_gemini_api</code>, pinned version <code>2</code>, for the separate interim Developer API path. Local code/tests are verified. Cloud resources, model/location, runtime identities and genuine investigation evidence are not verified.</p>
+  <div class="gate"><strong>Gate A - before cloud changes.</strong> Finish local implementation and container verification, including the reviewed cloud publisher described in step 5. Verify the approved funding account, remaining credits/currency, expiry, covered services and quotas. Include Cloud Run, Firestore, Cloud Tasks, Artifact Registry, authentication, logging/network usage and cloud inference. A billing link or Gemini Developer Free Tier is not cloud deployment credit coverage. Instance limits, budget alerts and the model-attempt cap are not a guaranteed total spending cap.</div>
+  <div class="gate"><strong>Gate B - before public release.</strong> Validate local containers, deny-all browser database rules, real operator identities and a reviewed cloud source-publication procedure. The existing seeder is local-only. Keep the worker private and queue paused during setup.</div>
+  <div class="gate"><strong>Gate C - before any live model request.</strong> Verify the exact cloud model/location and rate-card applicability, unexpired coverage and an agreed bounded investigation budget. Enable the runtime gates, today's admin control and queue only after the checks in step 13. This document is not authorization to spend or publish.</div>
+  <p class="small">Working directory for every command: <code>C:\Users\007ad\VSCode\GoogleHack\Genesis</code>. Commands are PowerShell examples, reviewed against current official references; they have not been executed against cloud resources. Stop on any non-zero native-command exit code before running the next command.</p>
+  <p><a href="README.md">Deployment checklist</a> / <a href="../README.md">Five submission deliverables</a> / <a href="../../docs/deployment-recovery.md">Existing recovery contract</a></p>
+  <label class="check"><input type="checkbox"><span>I have recorded the funding/identity gates and will execute only the cleared stages.</span></label>
+</section>
+
+<section id="names">
+  <span class="number">01 / Naming contract</span>
+  <h2>Reuse the project; name new resources consistently.</h2>
+  <p>Use <code>genesis-demo-&lt;purpose&gt;</code> for this prototype's new resources: lowercase letters, digits and hyphens. These are proposed names, not discovered resources. Inspect existing inventory before creating anything; reuse a matching reviewed resource rather than duplicating or renaming it.</p>
+  <div class="table-scroll"><table>
+    <caption>Resource inventory and intended names</caption>
+    <thead><tr><th>Resource</th><th>Name / identifier</th><th>Purpose and status</th></tr></thead>
+    <tbody>
+      <tr><td>Google Cloud project</td><td><code>genesis-aicb</code></td><td>Existing. Do not create another project or relink billing.</td></tr>
+      <tr><td>Cloud Run web</td><td><code>genesis-demo-web</code></td><td>Proposed. Public deterministic reads; private routes still verify Firebase tokens.</td></tr>
+      <tr><td>Cloud Run worker</td><td><code>genesis-demo-worker</code></td><td>Proposed. Private IAM service; only <code>POST /internal/jobs</code>.</td></tr>
+      <tr><td>Artifact Registry repository</td><td><code>genesis-demo-images</code></td><td>Proposed Docker repository. Images <code>web:src-&lt;fingerprint12&gt;</code> and <code>worker:src-&lt;fingerprint12&gt;</code>; deploy by SHA256 digest.</td></tr>
+      <tr><td>Cloud Tasks queue</td><td><code>genesis-demo-triage</code></td><td>Proposed. Handles triage and A5; one concurrent dispatch.</td></tr>
+      <tr><td>Web runtime service account</td><td><code>genesis-demo-web@genesis-aicb.iam.gserviceaccount.com</code></td><td>Firestore, Firebase token-revocation reads and queue enqueue.</td></tr>
+      <tr><td>Worker runtime service account</td><td><code>genesis-demo-worker@genesis-aicb.iam.gserviceaccount.com</code></td><td>Firestore plus verified managed Gemini access.</td></tr>
+      <tr><td>Task OIDC identity</td><td><code>genesis-demo-tasks@genesis-aicb.iam.gserviceaccount.com</code></td><td>Worker invocation only. Distinct from the worker runtime identity.</td></tr>
+      <tr><td>Firestore Native database</td><td><code>(default)</code></td><td>Inspect first. Current backend uses the default database; a named database will not be selected automatically.</td></tr>
+      <tr><td>Firebase web app display name</td><td><code>genesis-demo-web</code></td><td>Proposed display name; Firebase assigns the actual app ID. Reuse the existing project.</td></tr>
+      <tr><td>Existing interim secret</td><td><code>testing_free_gemini_api</code>, version <code>2</code></td><td>Keep the existing name/version. Managed cloud Gemini uses attached identity, not this key.</td></tr>
+      <tr><td>Frozen source dataset</td><td><code>synthetic-v1-20261015</code></td><td>Keep existing identity and nine detector rules. Do not rename data to match infrastructure names.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Use a supported, covered region for Cloud Run, queue and registry where possible. Verify Firestore's existing location before choosing it; database location cannot simply be changed later. Model location is a separate verified choice, potentially <code>global</code>. No region/model is approved by this guide. Check <a href="https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations">current model endpoint availability</a>.</p>
+  <details open><summary>PowerShell session values - fill after Gate A</summary><pre><code>$GenesisProject = 'genesis-aicb'
+$GenesisProjectNumber = '638299117256'
+$GenesisRegion = ''             # verified Cloud Run / registry / queue region
+$GenesisDatabaseLocation = ''   # verified existing or approved new DB location
+$GenesisModel = ''              # exact verified cloud model ID
+$GenesisModelLocation = ''      # exact supported model endpoint location
+$GenesisWeb = 'genesis-demo-web'
+$GenesisWorker = 'genesis-demo-worker'
+$GenesisRepo = 'genesis-demo-images'
+$GenesisQueue = 'genesis-demo-triage'
+$GenesisWebSA = "genesis-demo-web@${GenesisProject}.iam.gserviceaccount.com"
+$GenesisWorkerSA = "genesis-demo-worker@${GenesisProject}.iam.gserviceaccount.com"
+$GenesisTaskSA = "genesis-demo-tasks@${GenesisProject}.iam.gserviceaccount.com"
+$GenesisTaskAgent = "service-${GenesisProjectNumber}@gcp-sa-cloudtasks.iam.gserviceaccount.com"
+
+if (-not $GenesisRegion -or -not $GenesisDatabaseLocation -or -not $GenesisModel -or -not $GenesisModelLocation) {
+  throw 'Stop: verify funding, locations and model before resource creation.'
+}</code></pre></details>
+  <label class="check"><input type="checkbox"><span>Names, existing resources and supported locations are reviewed; actual choices are recorded privately.</span></label>
+</section>
+
+<section id="local">
+  <span class="number">02 / Local preparation</span>
+  <h2>Finish code and container checks first.</h2>
+  <ol>
+    <li>Use the pinned project tools and locks. Keep <code>LIVE_AI_ENABLED=false</code>, <code>LOCAL_GEMINI_ENABLED=false</code> and <code>CLOUD_TASKS_ENABLED=false</code>.</li>
+    <li>Run the existing unit, isolated emulator integration and frontend build commands. Run browser checks using the seeded loopback services described in the project README; do not point those checks at cloud.</li>
+    <li>Verify a local Linux container engine is available. Docker/Podman is currently absent on this workstation; installation/configuration is a separate prerequisite. Do not silently substitute a paid Cloud Build.</li>
+      <li>The separate source/configuration publisher now exists. Follow the <a href="../../docs/local-integration-handoff.md">local integration handoff</a> and verify its final checks before the reviewed cloud apply in step 5. Complete the local builds/checks from step 8 before application deployment; leave registry push for the cleared cloud stage.</li>
+    <li>Refresh evaluation provenance after application changes. Record the exact source fingerprint and actual final release commit separately; the current tested worktree is uncommitted.</li>
+  </ol>
+  <pre><code>.venv/Scripts/python.exe scripts/capture_evaluation.py --run-unit
+$GenesisPreviousPytestOptions = $env:PYTEST_ADDOPTS
+try {
+  $env:PYTEST_ADDOPTS = '--junitxml=.cache/integration-results.xml'
+  npm.cmd run test:integration
+  if ($LASTEXITCODE -ne 0) { throw 'Integration checks failed; stop.' }
+} finally {
+  $env:PYTEST_ADDOPTS = $GenesisPreviousPytestOptions
+}
+npm.cmd run build
+# Browser services/setup: follow ../../README.md from this guide.
+Get-Command docker -ErrorAction Stop
+docker version</code></pre>
+  <p class="small">Do not overwrite the preserved <code>.cache/gemini-smoke-20261016</code> evidence or invoke the live Smoke action during routine checks. A skipped integration test is not integration evidence.</p>
+  <label class="check"><input type="checkbox"><span>Required local tests and browser journeys pass, and the local container engine is available.</span></label>
+</section>
+
+<section id="inventory">
+  <span class="number">03 / Inspect before creating</span>
+  <h2>Confirm the account and actual resource inventory.</h2>
+  <p>The portable CLI already has a project-local configuration. Reuse it. Only if that login has expired, sign in again with <code>&amp; .\scripts\gcloud.ps1 auth login</code>. CLI login and Application Default Credentials are separate; <code>auth application-default login</code> is needed only for an explicitly approved local cloud client, not for attached Cloud Run runtime identities.</p>
+  <pre><code>&amp; .\scripts\gcloud.ps1 auth list
+&amp; .\scripts\gcloud.ps1 projects describe genesis-aicb --format='value(projectNumber)'
+&amp; .\scripts\gcloud.ps1 services list --enabled --project=genesis-aicb
+&amp; .\scripts\gcloud.ps1 firestore databases list --project=genesis-aicb
+&amp; .\scripts\gcloud.ps1 iam service-accounts list --project=genesis-aicb
+&amp; .\scripts\gcloud.ps1 run services list --project=genesis-aicb
+&amp; .\scripts\gcloud.ps1 artifacts repositories list --project=genesis-aicb</code></pre>
+  <p>Confirm project number <code>638299117256</code>, the intended signed-in identity, actual Firebase project/app status and existing resource ownership. Inventory reads do not create resources; protected service reads may be unavailable until their API is enabled. Do not enable APIs merely to make the inventory look complete before Gate A.</p>
+  <p>Keep account identifiers, local credentials and unredacted inventory in ignored <code>.cache/deploy/</code>. Do not print/access secret payloads for inventory. The existing secret's prior access check need not be repeated.</p>
+  <label class="check"><input type="checkbox"><span>Project/account are correct; existing resources are identified and duplicates are avoided.</span></label>
+</section>
+
+<section id="services">
+  <span class="number">04 / After Gate A - cloud changes begin</span>
+  <h2>Enable only the services this deployment uses.</h2>
+  <p>Reuse enabled services; enable missing ones only within verified coverage. The original route used local Docker builds and Cloud Run. The user later approved a single Cloud Build with a dedicated private staging bucket; actual results are in the build handoff. Cloud Run remains the deployment target. Firebase Hosting, Cloud Functions, App Engine and a new VPC are not added.</p>
+  <pre><code>&amp; .\scripts\gcloud.ps1 services enable run.googleapis.com artifactregistry.googleapis.com firestore.googleapis.com cloudtasks.googleapis.com aiplatform.googleapis.com identitytoolkit.googleapis.com iamcredentials.googleapis.com --project=$GenesisProject</code></pre>
+  <p><code>secretmanager.googleapis.com</code> is needed only for a selected secret-consuming path; the managed model worker does not require a key mount. Firebase console setup may require its own existing project/service configuration: review prompts and reuse this project, without activating a new billing plan as a side effect.</p>
+  <p class="small">Verify the Cloud Run and Cloud Tasks service agents and their managed service-agent roles were provisioned. Grant service-agent roles only to their actual Google-managed agents. <a href="https://docs.cloud.google.com/tasks/docs/creating-http-target-tasks">Official Cloud Tasks identity setup</a>.</p>
+  <label class="check"><input type="checkbox"><span>Only reviewed APIs are enabled; service agents and funded coverage are confirmed.</span></label>
+</section>
+
+<section id="data">
+  <span class="number">05 / Database and frozen publication</span>
+  <h2>Create the default database only if it is missing.</h2>
+  <p>Inspect <code>(default)</code> first. If it exists, verify Native mode and its location; do not delete/recreate it. If missing and approved, create it with the reviewed location. This backend does not configure an alternative database ID.</p>
+  <pre><code># Creation only if inventory confirms no default database:
+&amp; .\scripts\gcloud.ps1 firestore databases create --project=$GenesisProject --database='(default)' --location=$GenesisDatabaseLocation --type=firestore-native --delete-protection
+
+# Deploy existing rules/indexes only after the database and target are reviewed:
+&amp; .\scripts\firebase.ps1 deploy --only firestore:rules,firestore:indexes --project=$GenesisProject</code></pre>
+  <p>Keep <code>firestore.rules</code> deny-all for direct browser reads and writes. Wait for the existing indexes to become ready. Server client libraries use IAM and bypass those rules, so runtime permissions and API authorization both matter. <a href="https://docs.cloud.google.com/sdk/gcloud/reference/firestore/databases/create">Database command reference</a>; <a href="https://firebase.google.com/docs/firestore/security/overview">Firestore access boundaries</a>.</p>
+  <div class="gate"><strong>Reviewed publication checkpoint:</strong> <code>backend.publisher</code> now exists and defaults to an offline dry run. Its explicit cloud apply requires a private reviewed approval file, verified funding/source/identity and disabled execution controls. Follow the <a href="../../docs/local-integration-handoff.md">publisher and configuration handoff</a>; actual cloud publication is still pending. The existing <code>backend.seed</code> remains emulator-only and creates local Auth fixtures. Do not run <code>npm run seed</code> against this project, import the whole emulator export or weaken that guard.</div>
+  <ol>
+    <li>Review <code>python -m backend.publisher</code> using the existing generator, deterministic public-case builder and immutable writes. Start with its offline command in the handoff. Initialize fresh cloud configuration with the verified model/provider/location and matching <code>DEPLOYED_CODE_FINGERPRINT</code>; keep daily AI disabled.</li>
+    <li>Preserve dataset <code>synthetic-v1-20261015</code>, all nine rules, 112 private synthetic cases and source manifest <code>9f297c1dd06ef395d9dad851348d15c5ffa4db95cedb49dc4ad7b5b36130dfa0</code>.</li>
+    <li>Publish only the 12 demo cases and sanitized aggregate content. Held-out labels stay private, including in the private source manifest. Do not transfer local fixture users, smoke/fault attempts, notes or daily reservations as genuine cloud evidence.</li>
+    <li>Verify that repeating an unchanged publication preserves its pointer and frozen sources. Record the actual publication/configuration IDs. Release cannot proceed while this path is unimplemented or unverified.</li>
+  </ol>
+  <label class="check"><input type="checkbox"><span>Default database/rules/indexes and the separately reviewed cloud publication are verified.</span></label>
+</section>
+
+<section id="auth">
+  <span class="number">06 / Human access</span>
+  <h2>Connect Firebase sign-in to real operator UIDs.</h2>
+  <ol>
+    <li>Open the Firebase console and select the existing <code>genesis-aicb</code> project; add Firebase to that existing project only if missing and approved. Do not create another Google Cloud project.</li>
+    <li>Reuse or register a Web app with display name <code>genesis-demo-web</code>. Cloud Run serves this app; adding Firebase Hosting is unnecessary for this route.</li>
+    <li>In Authentication, verify and enable the Email/Password provider. Create only the confirmed operator/admin users through the approved workflow. Keep passwords out of this guide and deployment files.</li>
+    <li>Copy each actual Firebase UID into the private deployment configuration. Admin access requires membership in both <code>OPERATOR_UIDS</code> and <code>ADMIN_UIDS</code>. Do not use <code>operator-demo</code> or the local fixture password in cloud.</li>
+    <li>Obtain the Firebase Web app's public <code>apiKey</code> for <code>FIREBASE_WEB_API_KEY</code>. Verify project association and appropriate API/referrer restrictions, then test them on the deployed origin. Never reuse the Gemini Developer API key.</li>
+    <li>After the public service URL exists, review Authentication authorized domains and any key-origin restrictions against its actual hostname. Verify sign-in and server allowlist rejection; provider/key errors must not be bypassed by opening private API routes.</li>
+  </ol>
+  <p>The current app uses a fixed Firebase REST sign-in endpoint and server-side token verification. Tokens stay in browser memory; refresh-token persistence and signup are not added. Firebase web keys identify a project; they are separate from private model credentials. <a href="https://firebase.google.com/docs/reference/rest/auth#section-sign-in-email-password">REST sign-in contract</a>; <a href="https://firebase.google.com/docs/projects/api-keys">Firebase key restrictions and separation</a>.</p>
+  <label class="check"><input type="checkbox"><span>Provider, public web configuration, real user UIDs and operator/admin boundaries are reviewed.</span></label>
+</section>
+
+<section id="identities">
+  <span class="number">07 / Machine access</span>
+  <h2>Separate runtime, enqueue and invocation permissions.</h2>
+  <p>Use existing authorized provisioning access with the necessary resource-specific permissions. Deploying services also requires permission to act as their runtime accounts and read their images. Do not solve setup errors by granting Owner/Editor to runtime identities or downloading service-account JSON keys.</p>
+  <pre><code># Create only accounts absent from the inventory:
+&amp; .\scripts\gcloud.ps1 iam service-accounts create genesis-demo-web --project=$GenesisProject --display-name='Genesis demo web runtime'
+&amp; .\scripts\gcloud.ps1 iam service-accounts create genesis-demo-worker --project=$GenesisProject --display-name='Genesis demo worker runtime'
+&amp; .\scripts\gcloud.ps1 iam service-accounts create genesis-demo-tasks --project=$GenesisProject --display-name='Genesis demo task invoker'</code></pre>
+  <div class="table-scroll"><table>
+    <caption>Intended runtime grants - review scope before applying</caption>
+    <thead><tr><th>Principal</th><th>Role and scope</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td>Web runtime</td><td><code>roles/datastore.user</code>, application project; <code>roles/firebaseauth.viewer</code>, Firebase project</td><td>Application data transactions and revoked/disabled-user checks. These predefined roles cover more than individual records; confirm the project is dedicated to this prototype.</td></tr>
+      <tr><td>Web runtime</td><td><code>roles/cloudtasks.enqueuer</code>, this queue; <code>roles/iam.serviceAccountUser</code>, task-invoker account</td><td>Create named authenticated tasks and act as the selected OIDC identity.</td></tr>
+      <tr><td>Worker runtime</td><td><code>roles/datastore.user</code> and <code>roles/aiplatform.user</code>, reviewed project</td><td>Leases/ledger and the verified managed cloud model. Confirm applicable model/API permissions at integration.</td></tr>
+      <tr><td>Task-invoker account</td><td><code>roles/run.invoker</code>, worker service only</td><td>No Firestore/model/secret access.</td></tr>
+      <tr><td>Cloud Tasks service agent</td><td>Managed <code>roles/cloudtasks.serviceAgent</code>; <code>roles/iam.serviceAccountUser</code> on task-invoker account per current setup instructions</td><td>Mint delivery identity. Verify the actual Google-managed agent; do not grant its managed role to user accounts.</td></tr>
+    </tbody>
+  </table></div>
+  <details open><summary>Project and service-account IAM examples - after scope review</summary><pre><code>&amp; .\scripts\gcloud.ps1 projects add-iam-policy-binding $GenesisProject --member="serviceAccount:$GenesisWebSA" --role=roles/datastore.user
+&amp; .\scripts\gcloud.ps1 projects add-iam-policy-binding $GenesisProject --member="serviceAccount:$GenesisWebSA" --role=roles/firebaseauth.viewer
+&amp; .\scripts\gcloud.ps1 projects add-iam-policy-binding $GenesisProject --member="serviceAccount:$GenesisWorkerSA" --role=roles/datastore.user
+&amp; .\scripts\gcloud.ps1 projects add-iam-policy-binding $GenesisProject --member="serviceAccount:$GenesisWorkerSA" --role=roles/aiplatform.user
+&amp; .\scripts\gcloud.ps1 iam service-accounts add-iam-policy-binding $GenesisTaskSA --project=$GenesisProject --member="serviceAccount:$GenesisWebSA" --role=roles/iam.serviceAccountUser
+&amp; .\scripts\gcloud.ps1 iam service-accounts add-iam-policy-binding $GenesisTaskSA --project=$GenesisProject --member="serviceAccount:$GenesisTaskAgent" --role=roles/iam.serviceAccountUser</code></pre></details>
+  <p>Queue and worker-scoped grants come after those resources exist in steps 10-11. Attached identities supply ADC at runtime; do not set <code>GOOGLE_APPLICATION_CREDENTIALS</code> to a shipped key file. <a href="https://docs.cloud.google.com/tasks/docs/creating-http-target-tasks#http_target_tasks_with_authentication_tokens">Authenticated task setup</a>; <a href="https://docs.cloud.google.com/iam/docs/roles-permissions/firebaseauth">Firebase Auth permissions</a>.</p>
+  <label class="check"><input type="checkbox"><span>Distinct identities and reviewed least-necessary grants are recorded; no runtime credential files are shipped.</span></label>
+</section>
+
+<section id="images">
+<div class="note"><strong>Build evidence now available:</strong> the user approved one Google Cloud Build and image push under the AUD 6 monthly plan. Build <code>fbca029c-cde5-41a3-9eba-99dee9b03e54</code> passed all four steps and pushed both verified images. <a href="../../docs/deployment-recovery.md">Actual resources, image digests and checks</a>. Cloud Run deployment is still pending; do not repeat the build as part of following this guide.</div>
+
+  <span class="number">08 / Local build, approved registry push</span>
+  <h2>Build both Docker targets; publish immutable image references.</h2>
+  <p>The existing Dockerfile has <code>web</code>, <code>worker</code> and <code>local-worker</code> targets. Deploy <code>worker</code> for Cloud Tasks; <code>local-worker</code> is a one-shot emulator process. Use local builds, not an implicit source deployment/cloud build.</p>
+  <pre><code>$GenesisRecord = Get-Content docs/evaluation-record.json -Raw | ConvertFrom-Json
+$GenesisBuildId = 'src-' + $GenesisRecord.source.code_fingerprint.Substring(0, 12)
+docker build --platform linux/amd64 --target web -t "genesis-web:$GenesisBuildId" .
+docker build --platform linux/amd64 --target worker -t "genesis-worker:$GenesisBuildId" .
+docker run --rm -e GOOGLE_CLOUD_PROJECT=genesis-aicb --entrypoint python "genesis-web:$GenesisBuildId" -m backend.container --check
+docker run --rm -e GOOGLE_CLOUD_PROJECT=genesis-aicb -e WORKER_AUDIENCE=https://audience-not-configured.invalid -e "TASK_INVOKER_EMAIL=$GenesisTaskSA" --entrypoint python "genesis-worker:$GenesisBuildId" -m backend.container --worker --check</code></pre>
+  <p>Startup checks do not connect to Firestore or call a model. Also validate image execution/access boundaries and assess Linux image dependencies before release; Windows package audits alone do not audit these images. Preserve <code>.dockerignore</code>, locked dependencies and non-root UID 65532.</p>
+  <details open><summary>Create the reviewed registry and push - only after Gate A</summary><pre><code># Repository creation only if missing:
+&amp; .\scripts\gcloud.ps1 artifacts repositories create $GenesisRepo --project=$GenesisProject --location=$GenesisRegion --repository-format=docker --description='Genesis demo verified images'
+$GenesisRegistry = "${GenesisRegion}-docker.pkg.dev"
+$GenesisImageRoot = "$GenesisRegistry/$GenesisProject/$GenesisRepo"
+
+# Keep Docker CLI helper configuration in the ignored project cache.
+# Ensure the portable gcloud helper uses this session's existing CLI login.
+New-Item -ItemType Directory -Path .cache/deploy/docker-config -Force | Out-Null
+$env:DOCKER_CONFIG = (Resolve-Path .cache/deploy/docker-config).Path
+$env:CLOUDSDK_CONFIG = (Resolve-Path .tools/gcloud-config).Path
+$env:PATH = (Resolve-Path .tools/google-cloud-sdk/bin).Path + [IO.Path]::PathSeparator + $env:PATH
+&amp; .\scripts\gcloud.ps1 auth configure-docker $GenesisRegistry
+
+$GenesisWebTag = "$GenesisImageRoot/web:$GenesisBuildId"
+$GenesisWorkerTag = "$GenesisImageRoot/worker:$GenesisBuildId"
+docker tag "genesis-web:$GenesisBuildId" $GenesisWebTag
+docker tag "genesis-worker:$GenesisBuildId" $GenesisWorkerTag
+docker push $GenesisWebTag
+docker push $GenesisWorkerTag
+&amp; .\scripts\gcloud.ps1 artifacts docker images describe $GenesisWebTag --project=$GenesisProject
+&amp; .\scripts\gcloud.ps1 artifacts docker images describe $GenesisWorkerTag --project=$GenesisProject
+
+# Copy the actual returned immutable references; do not deploy a mutable tag.
+$GenesisWebImage = ''     # REGION-docker.pkg.dev/PROJECT/REPO/web@sha256:...
+$GenesisWorkerImage = ''  # REGION-docker.pkg.dev/PROJECT/REPO/worker@sha256:...
+if ($GenesisWebImage -notmatch '@sha256:[a-f0-9]{64}$' -or $GenesisWorkerImage -notmatch '@sha256:[a-f0-9]{64}$') {
+  throw 'Stop: record both verified pushed image digests.'
+}</code></pre></details>
+  <p class="small">Pushing uses funded registry storage/network services. Confirm deployer/pusher and Cloud Run service-agent image access without making the repository public. <a href="https://docs.cloud.google.com/sdk/gcloud/reference/artifacts/docker/images/describe">Image reference verification</a>; <a href="https://docs.cloud.google.com/run/docs/deploying">Container deployment requirements</a>.</p>
+  <label class="check"><input type="checkbox"><span>Both targets build/run locally; reviewed images and exact digests are available for deployment.</span></label>
+</section>
+
+<section id="environment">
+  <span class="number">09 / Explicit configuration</span>
+  <h2>Prepare two runtime files with all live gates off.</h2>
+  <p>Keep deployment files under ignored <code>.cache/deploy/</code>, not in public submission materials. The application reads process environment; it does not automatically load a local <code>.env</code>. Cloud Run receives the files through <code>--env-vars-file</code>. Existing <a href="../../.env.example">settings reference</a> and <a href="../../config/deployment.example.json">deployment inventory</a> remain the source contracts.</p>
+  <p>Put this common YAML into both <code>.cache/deploy/web.env.yaml</code> and <code>.cache/deploy/worker.env.yaml</code>. Replace the model placeholders only after actual verification; the model and verified-model values must match exactly.</p>
+  <pre><code>APP_MODE: "cloud"
+GOOGLE_CLOUD_PROJECT: "genesis-aicb"
+LIVE_AI_ENABLED: "false"
+CREDITS_VERIFIED: "false"
+CREDIT_VERIFIED_UNTIL: ""
+LOCAL_GEMINI_ENABLED: "false"
+LOCAL_GEMINI_FREE_VERIFIED: "false"
+CLOUD_TASKS_ENABLED: "false"
+GEMINI_MODEL: "REPLACE_VERIFIED_MODEL"
+VERIFIED_CLOUD_MODEL_ID: "REPLACE_VERIFIED_MODEL"
+VERIFIED_CLOUD_LOCATION: "REPLACE_VERIFIED_MODEL_LOCATION"</code></pre>
+  <div class="table-scroll"><table>
+    <caption>Append the correct role-specific YAML fields</caption>
+    <thead><tr><th>Web file</th><th>Worker file</th></tr></thead>
+    <tbody><tr><td><code>FIREBASE_WEB_API_KEY</code>: verified Firebase web configuration<br><code>OPERATOR_UIDS</code>: confirmed comma-separated UIDs<br><code>ADMIN_UIDS</code>: confirmed admin UIDs, also in operator list<br><code>WORKER_AUDIENCE</code>: actual worker URL from step 10<br><code>TASK_INVOKER_EMAIL</code>: task-invoker email above<br><code>TASK_QUEUE_PATH</code>: full path from step 11</td><td><code>WORKER_AUDIENCE</code>: initially <code>https://audience-not-configured.invalid</code>, then actual service URL<br><code>TASK_INVOKER_EMAIL</code>: <code>genesis-demo-tasks@genesis-aicb.iam.gserviceaccount.com</code><br>No web key or human allowlist is needed for the worker.</td></tr></tbody>
+  </table></div>
+  <p>Use <code>KEY: "value"</code> YAML syntax, one field per line. Omit <code>FIRESTORE_EMULATOR_HOST</code>, <code>FIREBASE_AUTH_EMULATOR_HOST</code>, <code>GEMINI_API_KEY</code> and <code>GOOGLE_APPLICATION_CREDENTIALS</code> entirely from cloud files. Do not bake them into images. The temporary worker audience is an intentional setup lock, not a real endpoint; replace it before granting delivery access.</p>
+  <p class="small">An env-file deployment replaces existing environment variables; preserve the full reviewed configuration. For small later changes use <code>--update-env-vars</code>, not <code>--set-env-vars</code>. Credit expiry must be timezone-aware and come from verified coverage; Admin cannot extend it. <a href="https://docs.cloud.google.com/sdk/gcloud/reference/run/deploy">Cloud Run environment semantics</a>.</p>
+  <label class="check"><input type="checkbox"><span>Role-specific files are reviewed, no private keys/emulator hosts are present, and all live flags remain false.</span></label>
+</section>
+
+<section id="worker">
+  <span class="number">10 / Private service first</span>
+  <h2>Deploy the worker, then resolve its real audience.</h2>
+  <p>Dependencies: verified images/coverage and a worker env file with a same-project task-invoker email. Initial deployment uses the explicit non-working audience from step 9, private IAM, no invocation grant and no live execution. This resolves the service-URL dependency without guessing a URL.</p>
+  <pre><code>&amp; .\scripts\gcloud.ps1 run deploy $GenesisWorker --project=$GenesisProject --region=$GenesisRegion --image=$GenesisWorkerImage --service-account=$GenesisWorkerSA --env-vars-file=.cache/deploy/worker.env.yaml --no-allow-unauthenticated --invoker-iam-check --ingress=all --concurrency=1 --cpu=1 --memory=1Gi --min=0 --max=1 --max-instances=1 --timeout=300s --no-cpu-boost
+if ($LASTEXITCODE -ne 0) { throw 'Private worker deployment failed; stop.' }
+$GenesisWorkerUrl = (&amp; .\scripts\gcloud.ps1 run services describe $GenesisWorker --project=$GenesisProject --region=$GenesisRegion --format='value(status.url)').Trim()
+if ($LASTEXITCODE -ne 0 -or $GenesisWorkerUrl -notmatch '^https://[^/]+$') { throw 'Missing canonical worker URL; stop.' }
+&amp; .\scripts\gcloud.ps1 run services update $GenesisWorker --project=$GenesisProject --region=$GenesisRegion --update-env-vars="WORKER_AUDIENCE=$GenesisWorkerUrl"
+if ($LASTEXITCODE -ne 0) { throw 'Audience update failed; stop.' }
+&amp; .\scripts\gcloud.ps1 run services add-iam-policy-binding $GenesisWorker --project=$GenesisProject --region=$GenesisRegion --member="serviceAccount:$GenesisTaskSA" --role=roles/run.invoker
+&amp; .\scripts\gcloud.ps1 run services get-iam-policy $GenesisWorker --project=$GenesisProject --region=$GenesisRegion</code></pre>
+  <p>Write the actual URL back into the worker file and the web file. Audit for inherited as well as service-level broad invocation: neither <code>allUsers</code> nor <code>allAuthenticatedUsers</code> may invoke this worker. Ingress <code>all</code> permits the HTTPS transport to reach it; private IAM and the application's signed-token check still gate invocation. If policy prevents the intended boundary, stop instead of making the worker public.</p>
+  <p>The audience is the canonical service origin, <strong>without</strong> <code>/internal/jobs</code>. Task delivery uses that path separately. The app checks issuer, expiry, exact verified invoker email and signature. Use the normal <code>Authorization</code> header; do not replace it with a signature-stripped <code>X-Serverless-Authorization</code> header. <a href="https://docs.cloud.google.com/run/docs/authenticating/service-to-service">Cloud Run token/header requirements</a>.</p>
+  <p class="small">Proposed initial sizing: one CPU, 1 GiB worker memory, zero minimum/one maximum instance. Validate cold-start/memory behavior within coverage. A private worker has no public health/docs route; a signed-out denial is expected.</p>
+  <label class="check"><input type="checkbox"><span>Actual worker URL/audience, private IAM, runtime identity and disabled live flags are verified.</span></label>
+</section>
+
+<section id="queue">
+  <span class="number">11 / Paused delivery</span>
+  <h2>Create one queue and grant enqueue access.</h2>
+  <p>Create only if missing. A new queue is active initially; immediately pause it while no producer is enabled. Existing queues should be paused and reviewed before updating settings. Queue redelivery and the single permitted provider retry are different mechanisms.</p>
+  <pre><code>&amp; .\scripts\gcloud.ps1 tasks queues create $GenesisQueue --project=$GenesisProject --location=$GenesisRegion --max-concurrent-dispatches=1 --max-dispatches-per-second=1 --max-attempts=3 --max-retry-duration=0s --min-backoff=310s --max-backoff=600s
+if ($LASTEXITCODE -ne 0) { throw 'Queue creation failed or already exists; inspect before continuing.' }
+&amp; .\scripts\gcloud.ps1 tasks queues pause $GenesisQueue --project=$GenesisProject --location=$GenesisRegion
+&amp; .\scripts\gcloud.ps1 tasks queues add-iam-policy-binding $GenesisQueue --project=$GenesisProject --location=$GenesisRegion --member="serviceAccount:$GenesisWebSA" --role=roles/cloudtasks.enqueuer
+&amp; .\scripts\gcloud.ps1 tasks queues describe $GenesisQueue --project=$GenesisProject --location=$GenesisRegion
+$GenesisQueuePath = "projects/$GenesisProject/locations/$GenesisRegion/queues/$GenesisQueue"</code></pre>
+  <p>Put that full path in the web runtime file. Keep queue-level target/header/auth overrides unset: the existing dispatcher supplies each task's hashed identity, URL <code>WORKER_AUDIENCE + /internal/jobs</code>, OIDC audience/invoker and <strong>300-second per-task deadline</strong>. The worker uses a 300-second fenced lease with a 240-second subprocess bound. The 310-second retry backoff allows lease expiry before a retry; delivery must still validate generation/checkpoints and stop on unknown provider outcomes.</p>
+  <p>The proposed delivery policy uses three attempts with no time-based retry limit; verify actual settings and delivery behavior before release. It does not authorize three model generations: the attempt ledger and immutable per-leg ceiling remain authoritative. Do not create manual tasks as a substitute for transactional enqueue. <a href="https://docs.cloud.google.com/sdk/gcloud/reference/tasks/queues/create">Queue flag semantics</a>; <a href="https://docs.cloud.google.com/sdk/gcloud/reference/tasks/queues/add-iam-policy-binding">Queue-scoped IAM</a>.</p>
+  <label class="check"><input type="checkbox"><span>Queue is paused, configuration/roles are reviewed, and its full resource path matches the project and region.</span></label>
+</section>
+
+<section id="web">
+  <span class="number">12 / Public reads, private operations</span>
+  <h2>Deploy the web only after source publication is ready.</h2>
+  <p>Dependencies: the cloud publisher checkpoint in step 5, ready indexes, real Firebase users/configuration, actual worker URL, full queue path and a complete reviewed web env file. Keep runtime live/task/credit flags false. This deployment makes the public service available; operator/admin routes continue to require server-verified tokens.</p>
+  <pre><code>&amp; .\scripts\gcloud.ps1 run deploy $GenesisWeb --project=$GenesisProject --region=$GenesisRegion --image=$GenesisWebImage --service-account=$GenesisWebSA --env-vars-file=.cache/deploy/web.env.yaml --allow-unauthenticated --ingress=all --concurrency=10 --cpu=1 --memory=512Mi --min=0 --max=1 --max-instances=1 --timeout=60s --no-cpu-boost
+if ($LASTEXITCODE -ne 0) { throw 'Web deployment failed; stop.' }
+$GenesisWebUrl = (&amp; .\scripts\gcloud.ps1 run services describe $GenesisWeb --project=$GenesisProject --region=$GenesisRegion --format='value(status.url)').Trim()
+if ($LASTEXITCODE -ne 0 -or $GenesisWebUrl -notmatch '^https://[^/]+$') { throw 'Missing web URL; stop.' }
+&amp; .\scripts\gcloud.ps1 run services describe $GenesisWeb --project=$GenesisProject --region=$GenesisRegion --format='value(status.latestReadyRevisionName)'
+&amp; .\scripts\gcloud.ps1 run services describe $GenesisWorker --project=$GenesisProject --region=$GenesisRegion --format='value(status.latestReadyRevisionName)'</code></pre>
+  <p>Record the literal URL, both final revision IDs, image digests and source fingerprint. Verify traffic is on the intended revisions. Finish Firebase authorized-domain/key-origin configuration using this actual web hostname. If organization policy blocks a public demo, resolve the approved hosting approach; do not weaken database/worker authorization.</p>
+  <p class="small">One CPU/512 MiB web memory and concurrency 10 are proposed starting settings, not measured capacity or cost coverage. Public requests can consume Cloud Run/database/network resources even with the AI switch off.</p>
+  <label class="check"><input type="checkbox"><span>Public URL/revisions are recorded; read-only browsing and cloud operator sign-in work without enabling AI.</span></label>
+</section>
+
+<section id="integration">
+  <span class="number">13 / Verify integrations before generation</span>
+  <h2>Test boundaries first; run one approved genuine workflow.</h2>
+  <div class="table-scroll"><table>
+    <caption>Deployed integration acceptance checks</caption>
+    <thead><tr><th>Integration</th><th>Check</th><th>Accept only when</th></tr></thead>
+    <tbody>
+      <tr><td>Public web / Firestore</td><td>Signed-out cases, frozen manifest and aggregate usage</td><td>12 demo cases; no private labels, notes or narratives; browsing sends no model requests. Empty usage is honest.</td></tr>
+      <tr><td>Firebase / API</td><td>Signed out, invalid token, non-allowlisted user, operator, admin</td><td>Private requests denied as appropriate; admin requires both lists; refresh/reload/session expiry does not leak private state.</td></tr>
+      <tr><td>Direct Firestore</td><td>Browser client read/write attempt under the reviewed test procedure</td><td>Deny-all rules hold; no browser database grant is added to make sign-in work.</td></tr>
+      <tr><td>Private worker</td><td>Signed-out/incorrect identity and audience</td><td>Denied before database/model access. Use deployed Google OIDC checks; local certificate fixtures are not cloud IAM evidence.</td></tr>
+      <tr><td>Cloud Tasks / lease</td><td>Authenticated delivery, duplicate/stale delivery and timeout recovery</td><td>Canonical audience; one active claim; sealed checkpoints preserved; no repeat of STARTED/unknown provider attempts.</td></tr>
+      <tr><td>Managed model</td><td>Exact verified model/location through attached worker identity</td><td>No API-key fallback; exact pre-count/caps, atomic reservations, validation and measured private ledger. Unknown costs remain unknown.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="gate"><strong>Gate C execution order:</strong> confirm the bounded case/attempt plan and coverage first. Then update both runtime revisions with the same verified model/location, actual timezone-aware expiry and <code>CREDITS_VERIFIED=true</code>/<code>LIVE_AI_ENABLED=true</code>; enable <code>CLOUD_TASKS_ENABLED=true</code> on web. Keep the queue paused and today's switch off while verifying both revisions. Set today's revision-checked admin limit/live switch only for the approved test, resume the queue and explicitly enqueue that case once.</div>
+  <details open><summary>Runtime activation example - only after Gate C approval</summary><pre><code>$GenesisVerifiedUntil = ''  # actual verified coverage expiry, including Z or UTC offset
+if ($GenesisVerifiedUntil -notmatch '(Z|[+-][0-9]{2}:[0-9]{2})$') {
+  throw 'Stop: supply the actual timezone-aware verification expiry.'
+}
+if ([DateTimeOffset]::Parse($GenesisVerifiedUntil) -le [DateTimeOffset]::UtcNow) {
+  throw 'Stop: verified coverage has expired.'
+}
+if (-not $GenesisModel -or -not $GenesisModelLocation) { throw 'Stop: verify the exact model/location.' }
+$GenesisAiGates = "LIVE_AI_ENABLED=true,CREDITS_VERIFIED=true,CREDIT_VERIFIED_UNTIL=$GenesisVerifiedUntil,GEMINI_MODEL=$GenesisModel,VERIFIED_CLOUD_MODEL_ID=$GenesisModel,VERIFIED_CLOUD_LOCATION=$GenesisModelLocation"
+&amp; .\scripts\gcloud.ps1 run services update $GenesisWorker --project=$GenesisProject --region=$GenesisRegion --update-env-vars=$GenesisAiGates
+if ($LASTEXITCODE -ne 0) { throw 'Worker activation failed; keep queue paused.' }
+&amp; .\scripts\gcloud.ps1 run services update $GenesisWeb --project=$GenesisProject --region=$GenesisRegion --update-env-vars="$GenesisAiGates,CLOUD_TASKS_ENABLED=true"
+if ($LASTEXITCODE -ne 0) { throw 'Web activation failed; keep queue paused.' }
+# Inspect both ready revisions and their complete configuration.
+# Leave the queue paused and today's Admin switch disabled until those checks pass.</code></pre></details>
+  <ol>
+    <li>Read the case's complete alert set. Enqueue all and only those alert IDs, without duplicates; do not select one alert from a multi-alert case.</li>
+    <li>Set a bounded daily limit above already reserved attempts and at most 120. Worst-case allowance is up to <code>6 x selected case alert count</code> for A2/A3/A4 plus up to <code>2</code> A5 attempts; any extra smoke requires its own allowance. This counts generation reservations, not all infrastructure usage or token-counting requests.</li>
+    <li>Resume only after the above checks: <code>&amp; .\scripts\gcloud.ps1 tasks queues resume $GenesisQueue --project=$GenesisProject --location=$GenesisRegion</code>. Explicitly refresh status; do not add browser polling or manually repeat an unknown model outcome.</li>
+    <li>Complete and manually ground a real A1/A2/A3/A4/A0 chain. Record actual private run/step IDs, usage and citation review; model output stays on private attempt records.</li>
+    <li>The human analyst supplies their actual verdict. Freeze analytical inputs, store genuine A5, then obtain the operator's explicit candidate freeze before the single stored held-out simulation. Insufficient 30/15 review evidence must remain labelled; no fabricated verdict, proposal or improvement.</li>
+    <li>Disable today's live switch after the bounded test and pause the queue. Preserve genuine evidence and any unknown usage. Update the actual release evaluation record, without converting local fault fixtures into live evidence.</li>
+  </ol>
+  <p>Input/generated-token caps remain A2 <code>4096/1536</code>, A3 <code>2048/768</code>, A4 <code>4096/2048</code>, A5 <code>8192/3072</code>. One known transient retry is allowed only where the frozen bundle permits it. Immutable rate-card accounting is implemented locally; exact pricing applicability is still unverified. Follow the handoff before populating <code>VERIFIED_RATE_CARD_JSON</code>. Missing or ambiguous categories remain unknown; filling deployment variables does not establish pricing or authorize execution.</p>
+  <label class="check"><input type="checkbox"><span>Deployed boundaries, bounded genuine workflow and real human/A5/held-out evidence are verified and recorded.</span></label>
+</section>
+
+<section id="handoff">
+  <span class="number">14 / Operate and hand off</span>
+  <h2>Keep the demo available and preserve recovery evidence.</h2>
+  <h3>Pause new work without losing records</h3>
+  <ol>
+    <li>Disable today's Admin live switch first. An already-sent request may still finish. Pause the queue to stop further delivery.</li>
+    <li>For a stronger runtime stop, update web and worker <code>LIVE_AI_ENABLED=false</code> and web <code>CLOUD_TASKS_ENABLED=false</code>; preserve the remaining configuration. These are new deployed revisions, not a zero-cost teardown.</li>
+    <li>Refresh private run/usage/audit state. Never clear reservations, delete attempts or turn an unknown step into a successful result. Checkpoint recovery is lease/generation controlled.</li>
+    <li>Roll back only to reviewed image/configuration revisions that keep execution disabled. Do not blindly shift traffic to an older live-enabled revision; preserve private worker IAM and actual audience.</li>
+  </ol>
+  <pre><code>&amp; .\scripts\gcloud.ps1 tasks queues pause $GenesisQueue --project=$GenesisProject --location=$GenesisRegion
+&amp; .\scripts\gcloud.ps1 run services update $GenesisWeb --project=$GenesisProject --region=$GenesisRegion --update-env-vars='LIVE_AI_ENABLED=false,CLOUD_TASKS_ENABLED=false'
+&amp; .\scripts\gcloud.ps1 run services update $GenesisWorker --project=$GenesisProject --region=$GenesisRegion --update-env-vars='LIVE_AI_ENABLED=false'</code></pre>
+  <p>Every new UTC day starts with AI disabled. Credit expiry comes from verified deployment configuration, never an Admin extension. Do not delete resources or evidence as an automatic cleanup; retain the public prototype through the official evaluation window under verified coverage.</p>
+  <h3>Record the handoff</h3>
+  <ul>
+    <li>In <a href="README.md">this folder's checklist</a>: public HTTPS URL, actual revision IDs, image/source provenance, deployed access checks, evaluation availability window and named responsibility for checks.</li>
+    <li>In the <a href="../README.md">submission checklist</a>: template-compliant final PDF, measured video below 180 seconds, accessible public GitHub URL, live prototype and brief description.</li>
+    <li>Keep full private run/account configuration in private evidence. Share only reviewed aggregate results and sanitized provenance. Recheck all final links signed out before authorized publication/submission.</li>
+  </ul>
+  <div class="note"><strong>Success is recorded evidence:</strong> a healthy public URL, protected private worker/data, real investigation and human evaluation, exact deployed revisions and all five submission items. Finishing this document's checkboxes does not set <code>release_ready=true</code>.</div>
+  <label class="check"><input type="checkbox"><span>Recovery, continued availability, final evidence and submission handoff are documented.</span></label>
+</section>
+<footer>Offline guide / no JavaScript, external assets or saved browser state. Current command references checked 17 October 2026; recheck service/model availability, quotas and coverage at execution. Existing application verification is unchanged by this documentation.</footer>
+</main>
+</div>
+</body>
+</html>

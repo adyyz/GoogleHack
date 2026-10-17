@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "status": "LOCAL_VERIFICATION_ONLY",
+  "recorded_at": "2026-10-17T09:14:22.611429+00:00",
+  "source": {
+    "base_revision": "d321c2485a4662243542b2f72bb65d8a4157d9c9",
+    "uncommitted_worktree": true,
+    "code_fingerprint": "efd33c4f51cc7bf69a72a3360221f940a06087afe407bd6d25ec5aecb083f873",
+    "release_revision": null
+  },
+  "local_provenance": {
+    "scope": "LOCAL_EMULATOR_TEST_ONLY",
+    "project_id": "demo-aml-insight",
+    "dataset_id": "synthetic-v1-20261015",
+    "manifest_hash": "9f297c1dd06ef395d9dad851348d15c5ffa4db95cedb49dc4ad7b5b36130dfa0",
+    "baseline_bundle_id": "db1a8a42c41db41f4ff2d358392b44cd82a60572930428d6800d7973e49c0b1c",
+    "publication_id": "144c80e710f747dd9ca1a11d2d1fb951",
+    "code_fingerprint": "efd33c4f51cc7bf69a72a3360221f940a06087afe407bd6d25ec5aecb083f873",
+    "private_routes_checked": 21,
+    "human_feedback_events": 0,
+    "genuine_model_results_created": 0,
+    "candidate_freezes_created": 0,
+    "heldout_comparisons_created": 0
+  },
+  "checks": {
+    "unit": {
+      "total": 93,
+      "passed": 82,
+      "skipped": 11,
+      "failed": 0,
+      "artifact_hash": "c1112f91d970611744fa6778130ffdb3df4736a11bb4ab05f9efdf4d9dbd4dcb"
+    },
+    "emulator_integration": {
+      "total": 11,
+      "passed": 11,
+      "skipped": 0,
+      "failed": 0,
+      "artifact_hash": "5a84c147a7675fa7012227e0b6bc1121e18183156c069c212b719026bbc3edb5"
+    }
+  },
+  "dependencies": {
+    "python_packages_checked": 57,
+    "python_findings": [],
+    "python_skipped": [],
+    "npm_production": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "npm_development_inclusive": {
+      "info": 0,
+      "low": 0,
+      "moderate": 5,
+      "high": 3,
+      "critical": 0,
+      "total": 8
+    },
+    "development_findings": [
+      {
+        "package": "@google-cloud/pubsub",
+        "severity": "moderate"
+      },
+      {
+        "package": "@opentelemetry/core",
+        "severity": "moderate"
+      },
+      {
+        "package": "braces",
+        "severity": "high"
+      },
+      {
+        "package": "chokidar",
+        "severity": "high"
+      },
+      {
+        "package": "firebase-tools",
+        "severity": "high"
+      },
+      {
+        "package": "gaxios",
+        "severity": "moderate"
+      },
+      {
+        "package": "re2",
+        "severity": "moderate"
+      },
+      {
+        "package": "uuid",
+        "severity": "moderate"
+      }
+    ],
+    "scope": "Installed Windows Python environment and npm lock; deployed image audit is pending"
+  },
+  "connectivity_only": {
+    "purpose": "DEVELOPER_API_CONNECTIVITY_ONLY",
+    "run_id": "420ad50af93554f11511ddfa",
+    "step_id": "b84e447bcf3c63e929153f31",
+    "model": "gemini-3.5-flash-lite",
+    "state": "COMPLETE",
+    "schema_pass": true,
+    "provider_reported_tokens": 74,
+    "prompt_tokens": 63,
+    "candidate_tokens": 11,
+    "generation_attempts": 1,
+    "live_enabled_after_check": false,
+    "cost_status": "UNKNOWN",
+    "completed_at": "2026-10-16 12:10:45.298217+00:00"
+  },
+  "release_evidence": {
+    "genuine_investigation_run_id": null,
+    "manual_citation_grounding": null,
+    "human_feedback_event_ids": [],
+    "genuine_a5_run_id": null,
+    "frozen_candidate_hash": null,
+    "heldout_comparison_id": null,
+    "deployed_revision_ids": [],
+    "signed_out_demo_url": null,
+    "public_repository_url": null,
+    "pdf_deck_url": null,
+    "video_url": null,
+    "video_duration_seconds": null,
+    "official_eligibility_and_cutoff": null
+  },
+  "release_evidence_status": "NOT_RECORDED",
+  "release_evidence_source": null,
+  "limitations": [
+    "Local fault/authorization fixtures are not live model or human evidence.",
+    "Connectivity smoke is not an AML investigation. Cost remains unknown.",
+    "No held-out comparison or optimization performance claim is established.",
+    "Funding coverage, cloud identities and publication/submission destinations remain unverified.",
+    "Normal local capture does not reverify preserved release references; explicit import only reads referenced persisted records.",
+    "Manual grounding remains a named human assertion; artifact access, deployment identity and eligibility require separate verification.",
+    "This record does not authorize deployment, billing activation or live requests."
+  ],
+  "release_ready": false
+}

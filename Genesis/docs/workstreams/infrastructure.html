@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Genesis / Agent 1 infrastructure checklist</title>
+<style>
+  :root { color-scheme:light; --navy:#101c31; --blue:#315dea; --paper:#f3f5f9; --ink:#17243b; --muted:#52627b; --line:#dce3ee; }
+  * { box-sizing:border-box; }
+  html { scroll-padding-top:20px; scrollbar-color:#aebbd0 var(--paper); }
+  body { margin:0; color:var(--ink); background:var(--paper); font:16px/1.6 "Segoe UI",Arial,sans-serif; }
+  h1,h2,h3 { font-family:Bahnschrift,"Segoe UI",sans-serif; line-height:1.2; }
+  h1 { font-size:clamp(32px,5vw,52px); margin:18px 0; max-width:850px; }
+  h2 { font-size:27px; margin:0 0 18px; } h3 { font-size:21px; margin:0; }
+  p { margin:12px 0; } li { margin:8px 0; }
+  a { color:#2447b8; text-underline-offset:3px; } a:hover { color:#132970; }
+  a:focus-visible,summary:focus-visible,input:focus-visible { outline:3px solid var(--blue); outline-offset:4px; }
+  .skip { position:absolute; left:16px; top:-100px; background:white; padding:12px; } .skip:focus { top:12px; }
+  header { background:var(--navy); color:white; padding:44px max(24px,calc((100vw - 1150px)/2)); }
+  header a { color:#c2d1ff; } header a:hover { color:white; }
+  header p { max-width:900px; } .eyebrow { color:#c2d1ff; font-size:13px; letter-spacing:1.6px; text-transform:uppercase; font-weight:700; }
+  main { max-width:1200px; margin:auto; padding:28px 24px 56px; }
+  nav { background:white; border:1px solid var(--line); border-radius:10px; padding:15px 20px; margin-bottom:24px; display:flex; gap:12px 24px; flex-wrap:wrap; }
+  section { background:white; border:1px solid var(--line); border-radius:10px; padding:26px; margin-bottom:24px; }
+  .note,.gate { padding:14px 18px; margin:16px 0; border-left:4px solid var(--blue); background:#edf1ff; }
+  .gate { background:#fff5e5; border-color:#9b6a18; }
+  .small,.meta { color:var(--muted); font-size:14px; }
+  .task { padding:22px 0; border-top:1px solid var(--line); }
+  .task:last-child { padding-bottom:0; }
+  .check { display:flex; align-items:flex-start; gap:12px; cursor:pointer; }
+  input[type=checkbox] { accent-color:var(--blue); width:20px; height:20px; flex:none; margin:3px 0 0; cursor:pointer; }
+  .task-title { font-family:Bahnschrift,"Segoe UI",sans-serif; font-size:21px; font-weight:600; line-height:1.3; }
+  .tag { display:inline-block; font:600 12px/1.5 "Segoe UI",sans-serif; background:var(--paper); border:1px solid var(--line); border-radius:4px; padding:2px 7px; vertical-align:middle; margin-left:6px; }
+  .task p,.task ul,.task details { margin-left:32px; }
+  .table-scroll { overflow-x:auto; scrollbar-gutter:stable; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  caption { text-align:left; font-weight:600; margin:0 0 10px; }
+  th,td { text-align:left; vertical-align:top; border-bottom:1px solid var(--line); padding:11px 10px; }
+  th { background:var(--paper); }
+  code { font:13px/1.6 "Cascadia Code",Consolas,monospace; overflow-wrap:anywhere; }
+  details { border:1px solid var(--line); padding:12px 14px; border-radius:6px; margin-top:14px; }
+  summary { cursor:pointer; font-weight:600; } summary:hover { color:var(--blue); }
+  .handoff { display:grid; grid-template-columns:52px minmax(0,1fr); gap:16px; padding:16px 0; border-top:1px solid var(--line); }
+  .handoff strong:first-child { color:var(--blue); }
+  footer { color:var(--muted); font-size:14px; }
+  @media(max-width:650px) { header { padding:32px 20px; } main { padding:20px 14px; } section { padding:21px 17px; } th,td { padding:10px 8px; } .task p,.task ul,.task details { margin-left:0; } }
+  @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  @media(forced-colors:active) { html { scrollbar-color:auto; } .note,.gate,.tag { border:1px solid CanvasText; } }
+  @media print { @page { margin:15mm; } body { background:white; font-size:10pt; } header { color:black; background:white; padding:0 0 16px; } header a,.eyebrow { color:black; } h1 { font-size:26pt; } main { max-width:none; padding:0; } section { border:0; border-top:1px solid #888; border-radius:0; padding:16px 0; } nav { display:none; } h2,h3,.check,summary { break-after:avoid; } tr,.handoff,.note,.gate { break-inside:avoid; } .table-scroll { overflow:visible; } .skip { display:none; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#start">Skip to infrastructure checklist</a>
+<header>
+  <div class="eyebrow">Genesis / Agent 1 / Infrastructure and integrations</div>
+  <h1>Prepare the foundation.<br>Deploy after the code is ready.</h1>
+  <p>One infrastructure workstream for the AI Builder Cup submission. Agent 1 prepares verified cloud inputs and deployment evidence; <a href="code-completion.html">Agent 2 finishes code and local checks</a>. Work in parallel until a shared handoff requires both.</p>
+  <p class="small" style="color:#d1dbef">Updated 17 October 2026, Australia/Sydney. Planning checklist only: no cloud resources, model requests, keys or publication are triggered by this file.</p>
+</header>
+<main>
+<section id="current-verification"><h2>Current evidence — 17 October 2026</h2><p>This supersedes the historical setup baseline below. Replacement build <code>a8278142-5a7e-4a24-a90d-df32f5aa780b</code> succeeded. Private revisions <code>genesis-demo-web-00002-22x</code> and <code>genesis-demo-worker-00003-fv2</code> passed pinned-image, runtime-identity, scale 0–1, IAM and signed-out-denial checks. Authenticated web health returned 200; cloud AI stays disabled and the queue paused.</p><p>Firebase Google provider and the verified operator/admin UID are configured. The newer popup UI is local-only until another build is authorized. Local Free Tier produced real investigations and one human review; this does not verify cloud model funding. A5, candidate freeze/held-out comparison, cloud source publication, public links, clean public repository, prescribed deck and actual video remain release gates. See <a href="../deployment-recovery.md">deployment evidence</a>.</p></section>
+<nav aria-label="Infrastructure checklist sections"><a href="#start">Start here</a><a href="#now">Quick wins now</a><a href="#names">Resource names</a><a href="#gated">Gated setup</a><a href="#handoffs">Agent handoffs</a><a href="#submission">Submission acceptance</a></nav>
+
+<section id="start">
+  <div class="note"><strong>Foundation created, 17 October 2026.</strong> You authorized resource creation while funding details are worked out. Sydney now has the default Native Firestore database with deletion protection, deny-all rules, 13 ready composite indexes, 14 field-index exemptions, <code>genesis-demo-images</code>, the paused <code>genesis-demo-triage</code> queue and three separate service identities with scoped IAM. Firebase and web app <code>genesis-demo-web</code> are registered. Anonymous database reads return HTTP 403. <a href="../deployment-recovery.md">Actual resource IDs and evidence</a>. Application deployment, Auth users/provider setup, container execution and cloud data publication remain pending; no model request was made.</div>
+  <h2>Resume from the recorded baseline</h2>
+  <p><strong>G01–G14 complete; G15–G30 remain gated, partial or pending.</strong> Existing records report 43 unit tests, nine emulator integration tests with zero integration skips, build/browser/design checks and disabled cloud transport/sign-in preparation. These are previous local results, not newly run cloud evidence.</p>
+  <p>Project <code>genesis-aicb</code> has linked billing. Remaining credit value, expiry, eligible services, cloud identities and a supported model/location/rate card are still unverified. The one prior Gemini Developer Free Tier smoke is connectivity evidence only; it authorizes no further requests.</p>
+  <div class="gate"><strong>Foundation provisioning authorized; live AI stays off.</strong> Your latest instruction supersedes the earlier funding-first and M1-first order for foundation creation. Funding remains unverified. Finish container execution and the reviewed cloud publisher before application deployment. Keep the queue paused and model execution disabled while those checks continue.</div>
+  <p class="small">Tick boxes only for evidence actually obtained. They are temporary reading aids with no saved browser state. Durable completion remains in <code>context/close_genesis_gaps.task-list.md</code> and <code>context/genesis-release-gates.md</code>; these internal files stay out of the public repository.</p>
+</section>
+
+<section id="now">
+  <h2>Quick wins available now</h2>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF01 · Confirm the submission contract <span class="tag">Ready to verify · G30</span></span></label>
+    <p class="meta">Owner: you + Agent 1 · Dependency: access to your registered dashboard.</p>
+    <p>Save the dashboard’s prescribed deck template, selected theme, registered team/eligibility confirmation, final submission fields and actual submission destination. Public pages still require fresh work built during the event; record ownership/reuse eligibility rather than assuming it. Do not change the registered category based on conflicting generic wording lower on the themes page. <a href="https://aibuildercup.com/Faqs.html">Official FAQ</a>; <a href="https://aibuildercup.com/themes.html">themes and requirements</a>.</p>
+    <p><strong>Accept:</strong> actual template link/file and non-secret dashboard facts recorded. Public sources checked today did not expose the prescribed template; it remains pending. Team eligibility and historical-material reuse remain unverified.</p>
+  </div>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF02 · Verify full funding coverage <span class="tag">Awaiting evidence · G15</span></span></label>
+    <p class="meta">Owner: you, assisted by Agent 1 · Dependency: approved billing-account access.</p>
+    <p>Record approved masked account, credit/allowance name, remaining amount/currency, actual expiry, exclusions and quotas. Explicitly cover model inference/token counting, Cloud Run, Firestore, Cloud Tasks, Artifact Registry, Firebase Authentication, logging and network usage; Cloud Build/storage only if chosen. Do not activate billing or substitute Developer API Free Tier for this evidence.</p>
+    <p><strong>Accept:</strong> a reviewed service-by-service coverage record, approved usage envelope and timezone-aware <code>CREDIT_VERIFIED_UNTIL</code>. Unknown items keep dependent actions blocked; linked billing does not verify promotional funding.</p>
+    <details open><summary>Current cost-control guidance checked today</summary><p>Ordinary <a href="https://docs.cloud.google.com/billing/docs/how-to/budgets">alerts-only budgets</a> notify without capping usage. Google now also documents <a href="https://docs.cloud.google.com/billing/docs/how-to/budgets-spend-caps">service-specific spend caps</a> for supported services. Those use gross estimates before credits, can enforce late and leave unsupported/persistent costs outside their scope. Verify account eligibility and coverage; neither these controls nor instance/attempt limits prove zero spend. No cap or alert is configured by this checklist.</p></details>
+  </div>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF03 · Review inventory, locations and model tuple <span class="tag">Preparation · G16</span></span></label>
+    <p class="meta">Owner: Agent 1 · Dependency: existing project records; verified coverage before any billable probe.</p>
+    <p>Use existing inventory first. Reuse matching resources; select the actual Firestore location, Cloud Run/Tasks/Registry region and exact managed model/location only after checking availability, residency, quota and coverage. Current documentation calls the managed platform Gemini Enterprise Agent Platform (formerly Vertex AI); the API remains <code>aiplatform.googleapis.com</code>. Check <a href="https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/locations">supported endpoints</a> and <a href="https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/model-versions">model lifecycle</a>; do not infer processing residency from a regional endpoint. Preserve the existing SDK contract until verified.</p>
+    <p><strong>Accept:</strong> no guessed region/model, verified API/model/location/pricing source and quota record. Hand Agent 2 the exact tuple and rate-card evidence; keep <code>VERIFIED_CLOUD_MODEL_ID</code>, <code>VERIFIED_CLOUD_LOCATION</code> and live flags unfilled/disabled until then.</p>
+  </div>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF04 · Review identities and least-privilege plan <span class="tag">Preparation · G16/G25</span></span></label>
+    <p class="meta">Owner: Agent 1 + you · Dependency: INF03 and confirmed operator/admin identities.</p>
+    <p>Confirm the deployer, separate web/worker/task accounts, actual Firebase users and <code>OPERATOR_UIDS</code>/<code>ADMIN_UIDS</code>. Admin membership must also be operator membership. Review the existing runbook’s scoped grants; never assign Owner/Editor as a shortcut.</p>
+    <p><strong>Accept:</strong> a reviewed IAM matrix: web → Firestore/Auth/queue and act-as task identity; worker → Firestore/managed model; task identity → worker invocation only. Attached runtime identities supply <a href="https://docs.cloud.google.com/docs/authentication/provide-credentials-adc">ADC</a>; no service-account key files or Developer model-key mounts.</p>
+  </div>
+</section>
+
+<section id="names">
+  <h2>Use one agreed resource vocabulary</h2>
+  <p>These are <strong>proposed names</strong>, not discovered or created resources. Use lowercase letters, digits and hyphens; inspect before creating duplicates. Full commands and deeper setup steps remain in the <a href="../../submission/deployed-prototype/resource-setup-guide.html#names">existing resource guide</a>.</p>
+  <div class="table-scroll"><table>
+    <caption>Names and non-secret values handed between the agents</caption>
+    <thead><tr><th>Resource</th><th>Proposed name / agreed value</th><th>Evidence still needed</th></tr></thead>
+    <tbody>
+      <tr><td>Existing project</td><td><code>genesis-aicb</code> · number <code>638299117256</code></td><td>Coverage, inventory and authorized deployer.</td></tr>
+      <tr><td>Cloud Run services</td><td><code>genesis-demo-web</code><br><code>genesis-demo-worker</code></td><td>Actual canonical HTTPS URLs and ready revision IDs.</td></tr>
+      <tr><td>Artifact Registry</td><td><code>genesis-demo-images</code><br><code>web:src-&lt;fingerprint12&gt;</code> / <code>worker:src-&lt;fingerprint12&gt;</code></td><td>Actual regional path; deploy immutable <code>@sha256:…</code> digests.</td></tr>
+      <tr><td>Cloud Tasks</td><td><code>genesis-demo-triage</code></td><td><code>projects/genesis-aicb/locations/VERIFIED_REGION/queues/genesis-demo-triage</code>.</td></tr>
+      <tr><td>Runtime identities</td><td><code>genesis-demo-web@genesis-aicb.iam.gserviceaccount.com</code><br><code>genesis-demo-worker@genesis-aicb.iam.gserviceaccount.com</code></td><td>Actual accounts and reviewed scoped IAM.</td></tr>
+      <tr><td>Task OIDC identity</td><td><code>genesis-demo-tasks@genesis-aicb.iam.gserviceaccount.com</code></td><td>Same queue project; worker-only invocation permission.</td></tr>
+      <tr><td>Firestore / Firebase</td><td>Reuse project; database <code>(default)</code> if confirmed.<br>Web app display name <code>genesis-demo-web</code>.</td><td>Actual database/location/app ID; web API key restricted to Auth; authorized hostname and real user UIDs.</td></tr>
+      <tr><td>Existing local-only secret</td><td><code>testing_free_gemini_api</code>, version <code>2</code></td><td>No new access approved. Managed cloud uses ADC; never export this value into HTML, browser config or source.</td></tr>
+    </tbody>
+  </table></div>
+  <details open><summary>Agent 1 → Agent 2 configuration handoff</summary>
+    <p>Non-secret verified values: <code>GOOGLE_CLOUD_PROJECT</code>, approved region/database, <code>GEMINI_MODEL</code>, <code>VERIFIED_CLOUD_MODEL_ID</code>, <code>VERIFIED_CLOUD_LOCATION</code>, <code>CREDIT_VERIFIED_UNTIL</code>, actual task identity, <code>TASK_QUEUE_PATH</code>, canonical worker URL as <code>WORKER_AUDIENCE</code>, restricted <code>FIREBASE_WEB_API_KEY</code>, operator/admin UIDs and image digests.</p>
+    <p>Cloud runtime mode is <code>APP_MODE=cloud</code>; omit emulator hosts and local Developer options. Keep <code>LIVE_AI_ENABLED=false</code>, <code>CREDITS_VERIFIED=false</code> and <code>CLOUD_TASKS_ENABLED=false</code> until the separate bounded execution checkpoint. Today's switch starts off; cloud daily limit is 1–120, never below reservations. Verification expiry is deployment-owned.</p>
+  </details>
+</section>
+
+<section id="gated">
+  <h2>Provision only after M1 and coverage review</h2>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF05 · Establish the reviewed foundation <span class="tag">Gated · G27</span></span></label>
+    <p class="meta">Owner: Agent 1 with your authorization · Dependency: M1, INF02–INF04.</p>
+    <p>Review and enable only needed APIs; reuse/create the agreed registry, Native-mode database, distinct service identities and scoped grants. Add the application’s deny-all direct-client Firestore rules and required indexes. A Google-managed service agent is distinct from the app task identity.</p>
+    <p><strong>Accept:</strong> literal resource names/locations, index readiness, intended IAM and denied direct-client access are recorded. No broad public database or worker grants. Apply the source guide’s gated commands only after reviewing their real values.</p>
+  </div>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF06 · Configure real operator sign-in <span class="tag">Gated · G16/G27</span></span></label>
+    <p class="meta">Owner: Agent 1 + you · Dependency: INF05 and confirmed human identities.</p>
+    <p>Reuse/register the Firebase web app; enable the reviewed email/password provider, create actual operator/admin users and restrict the public web API key to Firebase Authentication. Set the final authorized domain after the web URL exists. Real passwords stay outside source and recordings. <a href="https://firebase.google.com/docs/auth/web/password-auth">Firebase password-auth guidance</a>.</p>
+    <p><strong>Accept:</strong> real UIDs and public web configuration handed to Agent 2, server-side allowlists reviewed and no demo credential defaults in the deployed flow.</p>
+  </div>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF07 · Upload tested immutable images <span class="tag">Gated · G27</span></span></label>
+    <p class="meta">Owner: Agent 1 · Dependency: M1 verified container build/run and INF05 registry.</p>
+    <p>Upload only the approved web/worker images built from the tested source fingerprint. Prefer the existing local image path; selecting Cloud Build requires separate coverage and identity review. Do not use cloud build to bypass unfinished local checks.</p>
+    <p><strong>Accept:</strong> real SHA256 digests, successful non-root startup evidence and matching tested revision/fingerprint. Tags alone do not prove image identity.</p>
+  </div>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF08 · Publish reviewed frozen application data <span class="tag">Gated on code · G27</span></span></label>
+    <p class="meta">Owner: Agent 1 executes; Agent 2 supplies reviewed publisher · Dependency: M1 publisher checks, INF05.</p>
+    <p>Use the new explicit cloud publication path after review. The existing seeder remains emulator-only. Preserve all source/configuration immutability, deterministic publication identity and private held-out separation.</p>
+    <p><strong>Accept:</strong> real publication/configuration IDs; unchanged source manifest <code>9f297c1dd06ef395d9dad851348d15c5ffa4db95cedb49dc4ad7b5b36130dfa0</code>; exactly 12 public demo cases; no held-out labels or model narratives in public reads. Hand the actual IDs to Agent 2 for validation.</p>
+  </div>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF09 · Deploy private worker, then paused queue <span class="tag">Gated · G27</span></span></label>
+    <p class="meta">Owner: Agent 1 · Dependency: reviewed proposed runtime configuration from INF03–INF04, INF07–INF08 and deployment authorization.</p>
+    <p>Agent 2 reviews proposed configuration incrementally before deployment; M2 is completed afterwards. Deploy the worker with attached identity, authenticated invocation, concurrency 1 and all AI switches off. Learn and record its canonical URL during bootstrap, update the exact OIDC audience and grant only the task identity worker invocation. Create/reuse the same-project queue, pause immediately and keep web dispatch disabled.</p>
+    <p><strong>Accept:</strong> actual worker ready revision, URL, private IAM, queue path and pause state. Verify 300-second task deadline/lease and 240-second execution bound; distinguish delivery retries from the one allowed known-transient model retry. Current Google guidance requires an authenticated <a href="https://docs.cloud.google.com/tasks/docs/creating-http-target-tasks">same-project task identity</a> and the receiving <a href="https://docs.cloud.google.com/run/docs/authenticating/service-to-service">Cloud Run audience/invoker permission</a>.</p>
+  </div>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF10 · Deploy public reads with private operations <span class="tag">Gated · G27</span></span></label>
+    <p class="meta">Owner: Agent 1 · Dependency: INF06, INF08–INF09 and Agent 2 reviewed runtime config.</p>
+    <p>Deploy the reviewed web digest with all live/task switches off. Record the canonical public URL and actual revision; complete authorized-domain/key-origin configuration. Public browsing still incurs infrastructure usage even when no model can run.</p>
+    <p><strong>Accept:</strong> signed-out deterministic queue/case/Usage work, cloud sign-in works for allowed users, private/admin boundaries hold, no browser polling and no model requests from browsing. Send actual URLs/revisions/digests back to Agent 2 for deployed checks.</p>
+  </div>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF11 · Support bounded genuine integration evidence <span class="tag">Gated · G19/G20/G25/G28</span></span></label>
+    <p class="meta">Owner: both agents; you own analyst verdict and candidate freeze · Dependency: INF10, tested accounting and explicit bounded live approval.</p>
+    <p>First verify deployed OIDC, unauthorized access, duplicate delivery and unknown-outcome recovery with live generation disabled. Then review the selected complete case alert set, maximum attempts/tokens and covered usage. Activate only the approved bounded run; Agent 2 captures real provenance and manual grounding. Your actual review, genuine A5 and explicit candidate freeze precede one stored held-out comparison.</p>
+    <p><strong>Accept:</strong> genuine private run/step IDs, measured usage, real human feedback, stored A5 and idempotent simulation evidence. Pause queue and today's live switch afterwards; preserve reservations/checkpoints. Missing 30 total / 15 target-rule reviews stays labelled insufficient. Never manufacture success, human decisions or improvement.</p>
+  </div>
+  <div class="task">
+    <label class="check"><input type="checkbox"><span class="task-title">INF12 · Keep the demo available and release cleanly <span class="tag">Gated · G28/G30</span></span></label>
+    <p class="meta">Owner: Agent 1 availability; both agents release evidence; you approve publication/submission · Dependency: M3 and all five deliverables below.</p>
+    <p>Assign a named availability owner and covered operating window. The <a href="https://aibuildercup.com/#timeline">published timeline</a> lists evaluation <strong>19 October–6 November 2026</strong>; retain the working URL through that window and confirm any later finalist access requirement and exact end time in the dashboard. Keep ordinary demo browsing usable while AI remains bounded/off.</p>
+    <p><strong>Accept:</strong> actual hosted link, observed signed-out journeys, recovery/configuration revisions, coverage through evaluation and final accessible artifact links. Obtain final publication/submission approval on concrete reviewable artifacts; no repository publishing or form submission is triggered here.</p>
+  </div>
+</section>
+
+<section id="handoffs">
+  <h2>Four shared handoffs keep both agents moving</h2>
+  <div class="handoff"><strong>M1</strong><div><strong>Local ready → provisioning eligible.</strong> Agent 2 supplies tested code/accounting, reviewed cloud publisher and actual local web/worker container checks. Agent 1 supplies coverage, naming and identity review. Until both are ready, only preparation continues.</div></div>
+  <div class="handoff"><strong>M2</strong><div><strong>Approved setup → integration ready.</strong> Agent 2 reviews proposed runtime configuration incrementally before deployment. After INF09–INF10, Agent 1 hands actual IDs, URLs, paused queue/audience, revision IDs, digests and verified funding/model facts to Agent 2. Agent 2 validates the actual disabled deployment and contracts; that evidence completes M2.</div></div>
+  <div class="handoff"><strong>M3</strong><div><strong>Deployment checks → genuine workflow evidence.</strong> Both agents verify deployed boundaries; approved bounded execution produces a real investigation. You supply the analyst verdict and candidate freeze; Agent 2 stores genuine A5/comparison evidence.</div></div>
+  <div class="handoff"><strong>M4</strong><div><strong>Evidence and availability → reviewed submission.</strong> Both agents verify revision IDs, public links and all five items. You approve the final destination and publication. Existing draft artifacts alone do not clear this milestone.</div></div>
+</section>
+
+<section id="submission">
+  <h2>AI Builder Cup acceptance checklist</h2>
+  <p>Fresh official requirements checked <strong>17 October 2026</strong>: the prototype must meaningfully use Google AI and run on Google Cloud via Cloud Run or Firebase; English submission materials include a PDF deck. <a href="https://aibuildercup.com/themes.html">Official challenge requirements</a>.</p>
+  <label class="check"><input type="checkbox"><span><strong>Prescribed-template pitch deck.</strong> Retrieve the actual template and replace the existing local PDF draft with the final evidence-backed PDF. <a href="../../submission/pitch-deck/README.md">Deck folder</a>.</span></label>
+  <label class="check"><input type="checkbox"><span><strong>Real working demo video under 180 seconds.</strong> Target the existing 150-second script; measure the finished recording and verify public viewer access. <a href="../../submission/demo-video/README.md">Video folder</a>.</span></label>
+  <label class="check"><input type="checkbox"><span><strong>Live deployed prototype.</strong> Working Google Cloud HTTPS link, usable signed out and maintained through evaluation. <a href="../../submission/deployed-prototype/README.md">Deployment folder</a>.</span></label>
+  <label class="check"><input type="checkbox"><span><strong>Accessible public GitHub repository.</strong> Actual approved destination and release revision; clean reviewed source with no private context, secrets, emulator exports or held-out labels. <a href="../../submission/github-repository/README.md">Repository folder</a>.</span></label>
+  <label class="check"><input type="checkbox"><span><strong>Brief description.</strong> Final factual description matching the actual build, chosen theme and measured evidence. <a href="../../submission/description/README.md">Description folder</a>.</span></label>
+  <p class="small">The <a href="https://aibuildercup.com/Faqs.html">official FAQ</a> confirms a working hosted prototype, public GitHub, deck and video shorter than three minutes. The prescribed template, brief description and continued-availability reminder also come from your supplied submission notice; final dashboard fields still need inspection. All five final items remain pending.</p>
+  <div class="note"><strong>Cutoff:</strong> you reported <strong>18 October 2026, 11:59 PM IST (UTC+05:30)</strong> from the dashboard: <strong>19 October, 5:29 AM AEDT</strong> in Sydney. The <a href="https://aibuildercup.com/">public timeline</a> confirms 18 October only; the exact clock/timezone is user-reported, not independently inspected portal evidence.</div>
+</section>
+<footer>Offline, self-contained checklist. No JavaScript, external assets, automatic requests, persistent checkboxes or credential fields. Read alongside the <a href="code-completion.html">Agent 2 code checklist</a>, <a href="../../submission/README.md">submission checklist</a> and existing <a href="../../submission/deployed-prototype/resource-setup-guide.html">step-by-step resource guide</a>. Fresh web research updates requirements, not the application's completion status.</footer>
+</main>
+</body>
+</html>

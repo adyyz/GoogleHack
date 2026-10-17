@@ -1,5 +1,20 @@
 # Cloud connection vault: guided setup
 
+## Current state — 16 October 2026
+
+Latest key rotation: version 1 is now destroyed; metadata confirmed version **2** enabled. The reader defaults to pinned version **2**, not `latest`. One explicitly approved Developer API smoke test using version 2 passed (74 provider-reported tokens), and its local live switch was disabled afterward. No deployment occurred. The earlier version-1 access below is historical evidence.
+
+The user created `testing_free_gemini_api` in `genesis-aicb` and supplied its value through the console. Project-local CLI sign-in is verified; metadata reads confirmed version **1** is **enabled**. After the user confirmed available shared Secret Manager free allowance, one payload-suppressed access check succeeded. The key was captured only in the check process and was not printed or written to a file. No Gemini request or deployment occurred. The earlier suggested name `genesis-gemini-api-key` does not exist; reuse the user's existing secret.
+
+`scripts/with-gemini-secret.ps1` defaults to this existing secret and pinned version. Its default `Check` action captures the payload in process memory and reports only pass/fail and the resource reference. It restores the previous environment value on exit. The access check is complete; do not repeat it routinely. Gemini Developer API Free Tier and available Secret Manager allowance are independently user-confirmed; cloud inference/deployment credit coverage remains unverified.
+
+```powershell
+# From Genesis, after confirming available Secret Manager free allowance:
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/with-gemini-secret.ps1 -Action Check
+```
+
+The setup helper is plan-only by default. Do not run it to create another secret now that the existing secret is identified. The historical preparation instructions below describe the original plan; the current state above supersedes their not-provisioned/sign-in status and suggested smoke-test secret.
+
 Verified against Google documentation on 15 October 2026, Australia/Sydney.
 
 Target: **genesis-aicb**, project number **638299117256**. This guide and the connection inventory are prepared; no cloud vault, secret, service account, API enablement, IAM grant or cloud deployment has been created by this task. Funding remains unverified. The local CLI has no active signed-in account in its project-local configuration.

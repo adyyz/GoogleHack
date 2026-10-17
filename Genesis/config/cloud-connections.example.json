@@ -1,22 +1,54 @@
 {
   "schema_version": 1,
-  "environment": "cloud-target-not-connected",
+  "environment": "foundation-provisioned-application-not-deployed",
   "project_id": "genesis-aicb",
   "project_number": "638299117256",
   "funding_status": "UNVERIFIED",
+  "region": "australia-southeast1",
+  "artifact_repository": "australia-southeast1-docker.pkg.dev/genesis-aicb/genesis-demo-images",
+  "runtime_service_accounts": {
+    "web": "genesis-demo-web@genesis-aicb.iam.gserviceaccount.com",
+    "worker": "genesis-demo-worker@genesis-aicb.iam.gserviceaccount.com",
+    "tasks": "genesis-demo-tasks@genesis-aicb.iam.gserviceaccount.com"
+  },
   "secret_store": {
     "provider": "google-secret-manager",
-    "status": "NOT_PROVISIONED",
+    "status": "ACCESS_VERIFIED",
     "naming_prefix": "genesis-",
-    "smoke_test_secret": "genesis-vault-smoke-test",
-    "secret_values": "NEVER_STORE_IN_THIS_FILE"
+    "secret_values": "NEVER_STORE_IN_THIS_FILE",
+    "gemini_secret_version": "projects/genesis-aicb/secrets/testing_free_gemini_api/versions/2"
   },
   "connections": {
-    "gemini": { "auth": "application-default-credentials", "secret_required": false, "status": "NOT_CONNECTED" },
-    "firestore": { "auth": "application-default-credentials", "secret_required": false, "status": "LOCAL_EMULATOR_ONLY" },
-    "cloud_tasks": { "auth": "application-default-credentials-and-oidc", "secret_required": false, "status": "NOT_CONNECTED" },
-    "firebase_auth": { "auth": "firebase-user-id-token", "secret_required": false, "status": "LOCAL_EMULATOR_ONLY" },
-    "gemini_developer_api_optional": { "enabled": false, "secret_required": true, "secret_id_if_adopted": "genesis-gemini-api-key", "status": "NOT_SELECTED" }
+    "gemini": {
+      "auth": "application-default-credentials",
+      "secret_required": false,
+      "status": "NOT_CONNECTED"
+    },
+    "firestore": {
+      "auth": "application-default-credentials",
+      "secret_required": false,
+      "status": "CLOUD_DATABASE_PROVISIONED_APP_STILL_LOCAL",
+      "database_id": "(default)"
+    },
+    "cloud_tasks": {
+      "auth": "application-default-credentials-and-oidc",
+      "secret_required": false,
+      "status": "QUEUE_PROVISIONED_PAUSED",
+      "queue_path": "projects/genesis-aicb/locations/australia-southeast1/queues/genesis-demo-triage"
+    },
+    "firebase_auth": {
+      "auth": "firebase-user-id-token",
+      "secret_required": false,
+      "status": "WEB_APP_REGISTERED_PROVIDER_AND_USERS_PENDING",
+      "app_id": "1:638299117256:web:6f36170a6efba49d5cb7fd"
+    },
+    "gemini_developer_api_optional": {
+      "enabled": false,
+      "secret_required": true,
+      "secret_id_if_adopted": "testing_free_gemini_api",
+      "status": "CONNECTIVITY_VERIFIED_LOCAL_TRIAGE_PENDING",
+      "last_connectivity_run_id": "420ad50af93554f11511ddfa"
+    }
   },
   "notes": [
     "Non-secret inventory only; not loaded by the application.",

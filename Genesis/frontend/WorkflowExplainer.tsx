@@ -23,6 +23,6 @@ export function WorkflowExplainer() {
       <div className="flow-explanation-heading"><span className="explanation-marker">{String(active + 1).padStart(2, '0')}</span><div><h3>{step.title}</h3><span>{step.tag}</span></div><span className="outline-tag">DESIGNED WORKFLOW</span></div>
       <p>{step.description}</p><div className="flow-output"><Icon name="arrow" size={15} /><span>{step.output}</span></div>
     </section>
-    <p className="flow-help">Hover, focus, or select a step to explore its handover. This explains the planned workflow; Evolution analysis has not run.</p>
+    <p className="flow-help">Hover, focus, or select a step to explore its handover. This explains the designed workflow; stored evidence and actual results appear separately below.</p>
   </div>;
 }

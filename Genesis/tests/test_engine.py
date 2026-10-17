@@ -7,6 +7,16 @@ from pydantic import ValidationError
 from backend.dataset import generate_dataset
 from backend.engine import candidate_options, detect, enrich, prioritize, risk_assessment, simulate
 from backend.models import Split, Transaction
+from backend.seed import public_cases
+
+
+def test_public_case_hints_do_not_complete_triage():
+    cases = public_cases(generate_dataset())
+    assert len(cases) == 12
+    assert {case["queue_priority"] for case in cases} <= {"URGENT_REVIEW", "NEEDS_CONTEXT", "STANDARD_REVIEW"}
+    for case in cases:
+        assert case["queue_reason"]
+        assert all(alert["status"] == "PENDING" and not alert.get("priority") for alert in case["alerts"])
 
 
 def test_frozen_population_and_reference_isolation():

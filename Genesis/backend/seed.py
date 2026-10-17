@@ -4,15 +4,30 @@ from firebase_admin import auth
 
 from .config import Settings
 from .dataset import DATASET_ID, generate_dataset
-from .engine import detect, enrich, risk_assessment
+from .engine import detect, enrich, prioritize, risk_assessment
 from .models import Split
 from .repository import Repository, now
+
+
+def public_cases(data):
+    cases = []
+    for case in data.cases.values():
+        if case.split != Split.DEMO: continue
+        evidence = enrich(data, case)
+        risk = risk_assessment(evidence)
+        hint = prioritize(evidence, risk, None)
+        cases.append({"id": case.id, "name": data.customers[case.customer_id].display_name,
+            "scenario_family": case.scenario_family, "split": "DEMO", "alerts": detect(data, case),
+            "evidence": evidence, "risk": risk, "ai_status": "NOT_RUN",
+            "queue_priority": hint["priority"], "queue_reason": hint["reason"]})
+    return cases
 
 
 def seed(settings: Settings | None = None):
     settings = settings or Settings.load()
     if settings.mode != "local": raise RuntimeError("Fixture seeding is restricted to local emulators")
     repo = Repository(settings)
+    repo.ensure_baseline()
     data = generate_dataset()
     existing = repo.get("datasets", DATASET_ID)
     if existing and existing.get("state") == "READY":
@@ -35,17 +50,10 @@ def seed(settings: Settings | None = None):
             "seed": data.seed, "version": data.version, "manifest_hash": data.manifest_hash,
             "reference_labels": data.reference_labels, "reference_reasons": data.reference_reasons,
             "split_manifest": {case.id: case.split.value for case in data.cases.values()}, "frozen_at": now()})
-        demo_cases = []
-        for case in data.cases.values():
-            if case.split != Split.DEMO: continue
-            evidence = enrich(data, case)
-            demo_cases.append({"id": case.id, "name": data.customers[case.customer_id].display_name,
-                "scenario_family": case.scenario_family, "split": "DEMO", "alerts": detect(data, case),
-                "evidence": evidence, "risk": risk_assessment(evidence), "ai_status": "NOT_RUN"})
-        repo.publish(demo_cases, {"dataset_id": DATASET_ID, "manifest_hash": data.manifest_hash,
-            "case_count": 112, "discovery": 40, "selection": 20, "holdout": 40, "demo": 12,
-            "note": "Fresh synthetic source facts and rule calculations. No AI results have been generated."}, "local-seed")
         repo.audit("SEEDED", "datasets", DATASET_ID, "local-seed")
+    repo.publish(public_cases(data), {"dataset_id": DATASET_ID, "manifest_hash": data.manifest_hash,
+        "case_count": 112, "discovery": 40, "selection": 20, "holdout": 40, "demo": 12,
+        "note": "Fresh synthetic source facts and rule calculations. No AI results have been generated."}, "local-seed")
     app = firebase_admin.initialize_app(options={"projectId": settings.project_id}, name="local-seed")
     try:
         try: auth.get_user("operator-demo", app=app)

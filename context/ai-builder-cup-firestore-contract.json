@@ -1,0 +1,628 @@
+{
+  "schema_version": "1.0",
+  "status": "Design contract; not deployed; no SQL DDL or server-side schema enforcement",
+  "database": "Cloud Firestore Standard edition, Native mode",
+  "location": "australia-southeast1",
+  "collection_count": 18,
+  "common_fields": {
+    "schema_version": "integer = 1",
+    "created_at": "Firestore Timestamp (UTC)",
+    "created_by": "actor ID, service identity or operator UID",
+    "content_hash": "SHA-256 of canonical immutable payload; counters use revision instead"
+  },
+  "conventions": {
+    "references": "String document IDs, scoped by dataset_id. Links are checked by backend; Firestore does not enforce foreign keys.",
+    "money": "Integer minor units; original currency and frozen synthetic FX rate ID required; scores are numbers in [0,1].",
+    "nullable": "? means nullable/optional as described. Unknown usage is null, never zero.",
+    "arrays": "Bounded ID lists only. Large runs use pagination/chunk records; no unbounded arrays.",
+    "mutability": "Execution state may advance; sealed inputs, outputs, completed attempts and historical events cannot be overwritten through APIs.",
+    "deletion": "No cascade assumed. No production reset endpoint; fixtures use a fresh dataset ID."
+  },
+  "collections": [
+    {
+      "name": "datasets",
+      "purpose": "Frozen synthetic-data and split manifest",
+      "document_id": "version ID",
+      "writer": "seed command",
+      "immutable": true,
+      "fields": {
+        "version": "string",
+        "seed": "integer",
+        "generator_hash": "string",
+        "split_manifest": "map<case_id, CALIBRATION_DISCOVERY|CALIBRATION_SELECTION|HOLDOUT|DEMO>",
+        "case_counts": "map: 40 discovery, 20 selection, 40 holdout, 12 demo",
+        "reference_labels": "private map<case_id, SUSPICIOUS|BENIGN|INCONCLUSIVE>",
+        "label_provenance": "SYNTHETIC_REFERENCE",
+        "manifest_hash": "string",
+        "frozen_at": "Timestamp"
+      },
+      "links": []
+    },
+    {
+      "name": "customers",
+      "purpose": "Fictional customer profiles",
+      "document_id": "hash(dataset_id, local_id)",
+      "writer": "seed command",
+      "immutable": true,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "local_id": "string",
+        "display_name": "fictional string",
+        "customer_type": "INDIVIDUAL|ORGANIZATION",
+        "onboarded_at": "Timestamp",
+        "pep": "boolean?",
+        "synthetic_sanctions_flag": "boolean?",
+        "deceased_at": "Timestamp?",
+        "profile_context": "bounded string"
+      },
+      "links": [
+        "datasets"
+      ]
+    },
+    {
+      "name": "accounts",
+      "purpose": "Account context and prior activity metadata",
+      "document_id": "hash(dataset_id, local_id)",
+      "writer": "seed command",
+      "immutable": true,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "customer_id": "customers ID",
+        "opened_at": "Timestamp",
+        "prior_activity_at": "Timestamp?",
+        "history_complete_from": "Timestamp?",
+        "currency": "ISO currency",
+        "status": "OPEN|CLOSED",
+        "account_type": "string"
+      },
+      "links": [
+        "datasets",
+        "customers"
+      ]
+    },
+    {
+      "name": "transactions",
+      "purpose": "Immutable evidence records",
+      "document_id": "hash(dataset_id, local_id)",
+      "writer": "seed command",
+      "immutable": true,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "account_id": "accounts ID",
+        "customer_id": "customers ID",
+        "occurred_at": "Timestamp",
+        "original_minor": "integer",
+        "currency": "ISO currency",
+        "amount_aud_minor": "integer",
+        "fx_rate_id": "frozen synthetic rate ID",
+        "direction": "CREDIT|DEBIT",
+        "type": "CASH|WIRE|CRYPTO|TRANSFER|PAYMENT",
+        "counterparty_id": "synthetic string?",
+        "counterparty_sanctions_flag": "boolean?",
+        "description": "bounded untrusted string"
+      },
+      "links": [
+        "datasets",
+        "accounts",
+        "customers"
+      ]
+    },
+    {
+      "name": "cases",
+      "purpose": "Evaluation unit linking one trigger to its history",
+      "document_id": "hash(dataset_id, scenario_id)",
+      "writer": "seed command",
+      "immutable": true,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "scenario_family": "string",
+        "split": "same enum as manifest",
+        "customer_id": "customers ID",
+        "account_ids": "bounded accounts IDs",
+        "trigger_transaction_id": "transactions ID",
+        "history_transaction_ids": "bounded transactions IDs",
+        "scripted_review": "map<verdict, provenance=SYNTHETIC_SCRIPTED_REVIEW, notes>?",
+        "data_quality": "bounded map"
+      },
+      "links": [
+        "datasets",
+        "customers",
+        "accounts",
+        "transactions"
+      ]
+    },
+    {
+      "name": "alerts",
+      "purpose": "Rule matches; stable queue projection",
+      "document_id": "hash(dataset_id, trigger_transaction_id, rule_id)",
+      "writer": "detector; orchestrator projection",
+      "immutable": false,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "case_id": "cases ID",
+        "trigger_transaction_id": "transactions ID",
+        "rule_id": "one of nine demo rule IDs",
+        "detector_version_id": "config_versions ID",
+        "status": "PENDING|RUNNING|COMPLETE|ERROR",
+        "current_run_id": "pipeline_runs ID?",
+        "priority": "URGENT_REVIEW|NEEDS_CONTEXT|STANDARD_REVIEW|LOWER_PRIORITY?",
+        "feedback_revision": "integer >= 0"
+      },
+      "links": [
+        "datasets",
+        "cases",
+        "transactions",
+        "config_versions",
+        "pipeline_runs"
+      ]
+    },
+    {
+      "name": "pipeline_runs",
+      "purpose": "Job state, linkage, frozen configuration and parent/child work",
+      "document_id": "run UUID or idempotency hash",
+      "writer": "API enqueue; worker state transitions",
+      "immutable": false,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "kind": "TRIAGE_BATCH|TRIAGE_ALERT|EVOLUTION|EVALUATION|SIMULATION",
+        "parent_run_id": "pipeline_runs ID?",
+        "alert_id": "alerts ID?",
+        "case_id": "cases ID?",
+        "config_bundle_id": "config_versions BUNDLE ID",
+        "state": "QUEUED|DISPATCH_FAILED|RUNNING|COMPLETE|FAILED",
+        "stage": "leg ID?",
+        "lease_owner": "string?",
+        "lease_until": "Timestamp?",
+        "checkpoint_step_id": "step_runs ID?",
+        "dispatch_generation": "integer",
+        "retry_of_run_id": "pipeline_runs ID?",
+        "input_manifest": "bounded ID/hash map",
+        "output_refs": "bounded ID map",
+        "started_at": "Timestamp?",
+        "completed_at": "Timestamp?",
+        "error_code": "redacted string?"
+      },
+      "links": [
+        "datasets",
+        "pipeline_runs",
+        "alerts",
+        "cases",
+        "config_versions",
+        "step_runs"
+      ]
+    },
+    {
+      "name": "step_runs",
+      "purpose": "Per-leg, per-attempt output AND usage ledger; no duplicate usage table",
+      "document_id": "hash(run_id, leg_id, attempt_number)",
+      "writer": "orchestrator; shared model gateway",
+      "immutable": false,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "run_id": "pipeline_runs ID",
+        "alert_id": "alerts ID?",
+        "case_id": "cases ID?",
+        "leg_id": "A1|A2|A3|A4|A0|A5|DETECT|AGGREGATE|SIMULATE|EVALUATE",
+        "attempt_number": "integer >= 1",
+        "retry_of_step_id": "step_runs ID?",
+        "parent_step_ids": "bounded step_runs IDs",
+        "config_bundle_id": "config_versions BUNDLE ID",
+        "prompt_version_id": "config_versions PROMPT ID?",
+        "skill_version_id": "config_versions SKILL ID?",
+        "context_version_id": "config_versions CONTEXT ID?",
+        "risk_version_id": "config_versions RISK_POLICY ID?",
+        "model_id": "string? (null for deterministic)",
+        "input_hash": "string",
+        "selected_evidence_ids": "bounded source ID list",
+        "input_snapshot": "bounded private structured map",
+        "output": "bounded validated structured map?",
+        "validation": "map<schema_pass, evidence_pass, findings>",
+        "state": "STARTED|SUCCEEDED|FAILED|UNKNOWN_OUTCOME",
+        "started_at": "Timestamp",
+        "finished_at": "Timestamp?",
+        "duration_ms": "integer?",
+        "context_precount_tokens": "integer?",
+        "prompt_tokens": "integer?",
+        "cached_prompt_tokens": "integer?",
+        "candidate_tokens": "integer?",
+        "thought_tokens": "integer?",
+        "tool_prompt_tokens": "integer?",
+        "total_tokens": "integer?",
+        "usage_status": "PROVIDER_REPORTED|NOT_APPLICABLE|UNKNOWN",
+        "provider_usage_raw": "bounded private map?",
+        "provider_request_id": "string?",
+        "rate_card_id": "config_versions RATE_CARD ID?",
+        "estimated_usd_micros": "integer?",
+        "cost_status": "ESTIMATED|NOT_APPLICABLE|UNKNOWN",
+        "billing_reconciliation_ref": "string?",
+        "error_code": "redacted string?"
+      },
+      "links": [
+        "datasets",
+        "pipeline_runs",
+        "alerts",
+        "cases",
+        "step_runs",
+        "config_versions"
+      ]
+    },
+    {
+      "name": "feedback_events",
+      "purpose": "Append-only analyst decisions; automatic priority is never a label",
+      "document_id": "hash(alert_id, revision)",
+      "writer": "operator API transaction",
+      "immutable": true,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "case_id": "cases ID",
+        "alert_id": "alerts ID",
+        "triage_run_id": "pipeline_runs ID",
+        "verdict": "TRUE_POSITIVE|FALSE_POSITIVE|INCONCLUSIVE",
+        "provenance": "HUMAN_OPERATOR|SYNTHETIC_SCRIPTED_REVIEW",
+        "notes": "bounded string",
+        "override_action": "ESCALATE|REVIEW|MONITOR|CLOSE|null",
+        "revision": "integer >= 1",
+        "supersedes_id": "feedback_events ID?",
+        "actor_uid": "private string",
+        "submitted_at": "Timestamp"
+      },
+      "links": [
+        "datasets",
+        "cases",
+        "alerts",
+        "pipeline_runs",
+        "feedback_events"
+      ]
+    },
+    {
+      "name": "evolution_runs",
+      "purpose": "Frozen population and analytical report",
+      "document_id": "same ID as EVOLUTION pipeline_run",
+      "writer": "statistics service then A5",
+      "immutable": true,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "pipeline_run_id": "pipeline_runs ID",
+        "analysis_kind": "MONITORING|CONTEXT_COST|PROMPT_SKILL|RISK_POLICY",
+        "feedback_event_ids": "bounded feedback_events IDs",
+        "feedback_snapshot_hash": "string",
+        "usage_step_ids": "bounded step_runs IDs",
+        "usage_snapshot_hash": "string",
+        "evaluation_ids": "bounded evaluations IDs",
+        "config_bundle_ids": "bounded config_versions IDs",
+        "population_counts": "computed map",
+        "statistics": "computed map; nullable denominators",
+        "pattern_keys": "bounded strings",
+        "recommendation_ids": "bounded recommendations IDs",
+        "report_step_id": "A5 step_runs ID",
+        "data_sufficiency": "SUFFICIENT_FOR_DEMO|INSUFFICIENT",
+        "cutoff_at": "Timestamp"
+      },
+      "links": [
+        "datasets",
+        "pipeline_runs",
+        "feedback_events",
+        "step_runs",
+        "evaluations",
+        "config_versions",
+        "recommendations"
+      ]
+    },
+    {
+      "name": "patterns",
+      "purpose": "Stable pattern identity and source occurrences",
+      "document_id": "hash(dataset_id, rule_id, signal_family, config_bundle_id)",
+      "writer": "statistics service",
+      "immutable": false,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "rule_id": "string?",
+        "signal_family": "string",
+        "config_bundle_id": "config_versions ID",
+        "description": "bounded string",
+        "first_evolution_run_id": "evolution_runs ID",
+        "latest_evolution_run_id": "evolution_runs ID",
+        "distinct_snapshot_hashes": "bounded string list",
+        "support_case_ids": "bounded cases IDs",
+        "occurrence_count": "count of distinct evidence snapshots; not a probability"
+      },
+      "links": [
+        "datasets",
+        "config_versions",
+        "evolution_runs",
+        "cases"
+      ]
+    },
+    {
+      "name": "recommendations",
+      "purpose": "Proposal links changes, supporting observations and human review",
+      "document_id": "proposal UUID",
+      "writer": "A5 proposal writer; operator review API",
+      "immutable": false,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "evolution_run_id": "evolution_runs ID",
+        "kind": "RULE_THRESHOLD|EXPECTED_ACTIVITY_EXEMPTION|PROMPT|SKILL|CONTEXT|RISK_WEIGHTS",
+        "base_config_bundle_id": "config_versions ID",
+        "candidate_config_bundle_id": "config_versions ID?",
+        "candidate_spec": "allowlisted structured change; no executable code",
+        "support_case_ids": "bounded cases IDs",
+        "support_step_ids": "bounded step_runs IDs",
+        "hypothesis": "bounded string",
+        "evaluation_ids": "bounded evaluations IDs",
+        "simulation_ids": "bounded simulations IDs",
+        "state": "PROPOSED|EVALUATING|EVALUATED|REVIEWED|REJECTED",
+        "review_note": "bounded string?",
+        "reviewed_by": "private operator UID?",
+        "reviewed_at": "Timestamp?",
+        "activation_allowed": "false in hackathon"
+      },
+      "links": [
+        "datasets",
+        "evolution_runs",
+        "config_versions",
+        "cases",
+        "step_runs",
+        "evaluations",
+        "simulations"
+      ]
+    },
+    {
+      "name": "config_versions",
+      "purpose": "Immutable prompts, skill instructions, context/risk policies, prices and version bundles",
+      "document_id": "content hash",
+      "writer": "operator-controlled repository import; candidate writer",
+      "immutable": true,
+      "fields": {
+        "kind": "PROMPT|SKILL|CONTEXT|RISK_POLICY|RATE_CARD|BUNDLE",
+        "leg_id": "agent ID?",
+        "parent_id": "config_versions ID?",
+        "origin": "BASELINE|EVOLUTION_CANDIDATE",
+        "body": "bounded map: instructions/schema/tool allowlist/context policy/weights/rates",
+        "component_ids": "for BUNDLE: map<leg, version IDs>",
+        "effective_from": "Timestamp?",
+        "source_url": "pricing source URL?",
+        "currency": "USD for RATE_CARD",
+        "billing_rules": "model/region/tier/cache/thought token applicability for RATE_CARD",
+        "content_hash": "canonical SHA-256"
+      },
+      "links": [
+        "config_versions"
+      ]
+    },
+    {
+      "name": "evaluations",
+      "purpose": "Paired baseline/candidate evaluation and exact provenance",
+      "document_id": "evaluation UUID",
+      "writer": "evaluation harness",
+      "immutable": true,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "recommendation_id": "recommendations ID?",
+        "pipeline_run_id": "pipeline_runs ID",
+        "baseline_config_bundle_id": "config_versions ID",
+        "candidate_config_bundle_id": "config_versions ID",
+        "split": "CALIBRATION_SELECTION|HOLDOUT|DEMO",
+        "case_ids": "bounded cases IDs",
+        "reference_manifest_hash": "string",
+        "baseline_run_ids": "bounded pipeline_runs IDs",
+        "candidate_run_ids": "bounded pipeline_runs IDs",
+        "prediction_mapping_version": "string",
+        "metrics": "TP/FP/TN/FN/abstentions, recall, precision, FPR, citation support, latencies",
+        "usage_summary": "provider-known totals and unknown-attempt count",
+        "cost_summary": "estimated comparable USD and unknowns",
+        "acceptance_policy_id": "config_versions ID",
+        "result": "PASS|FAIL|INSUFFICIENT_EVIDENCE",
+        "frozen_candidate_hash": "string",
+        "completed_at": "Timestamp"
+      },
+      "links": [
+        "datasets",
+        "recommendations",
+        "pipeline_runs",
+        "config_versions",
+        "cases"
+      ]
+    },
+    {
+      "name": "simulations",
+      "purpose": "Rule-change replay on the same case population",
+      "document_id": "simulation UUID",
+      "writer": "deterministic simulation service",
+      "immutable": true,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "pipeline_run_id": "pipeline_runs ID",
+        "recommendation_id": "recommendations ID",
+        "baseline_detector_id": "config_versions ID",
+        "candidate_detector_id": "config_versions ID",
+        "split": "CALIBRATION_SELECTION|HOLDOUT",
+        "case_ids": "bounded cases IDs",
+        "retained_alert_ids": "bounded alerts IDs",
+        "removed_alert_ids": "bounded alerts IDs",
+        "baseline_case_detection": "map<case_id,boolean>",
+        "candidate_case_detection": "map<case_id,boolean>",
+        "metrics": "benign alerts removed, suspicious cases lost, recall, other-rule retention",
+        "result": "RISK_DETECTED|NO_ADDITIONAL_MISSES_OBSERVED|INSUFFICIENT_EVIDENCE"
+      },
+      "links": [
+        "datasets",
+        "pipeline_runs",
+        "recommendations",
+        "config_versions",
+        "cases",
+        "alerts"
+      ]
+    },
+    {
+      "name": "audit_events",
+      "purpose": "Append-only application event trail",
+      "document_id": "event UUID or idempotency hash",
+      "writer": "API and worker audit writer",
+      "immutable": true,
+      "fields": {
+        "dataset_id": "datasets ID?",
+        "request_id": "string",
+        "run_id": "pipeline_runs ID?",
+        "step_id": "step_runs ID?",
+        "object_collection": "one of these collection names",
+        "object_id": "string",
+        "action": "QUEUED|STEP_STARTED|STEP_COMPLETED|FEEDBACK_RECORDED|CANDIDATE_CREATED|EVALUATED|REVIEWED|PUBLISHED|FAILED",
+        "actor": "service ID or private operator UID",
+        "before_hash": "string?",
+        "after_hash": "string?",
+        "occurred_at": "Timestamp",
+        "reason": "bounded redacted string?"
+      },
+      "links": [
+        "datasets",
+        "pipeline_runs",
+        "step_runs"
+      ]
+    },
+    {
+      "name": "publications",
+      "purpose": "Explicit sanitized, frozen judge view",
+      "document_id": "publication UUID; separate active manifest ID",
+      "writer": "operator publication API",
+      "immutable": false,
+      "fields": {
+        "dataset_id": "datasets ID",
+        "state": "DRAFT|PUBLISHED",
+        "snapshot_hash": "string",
+        "source_run_ids": "bounded pipeline_runs IDs",
+        "public_cases": "bounded sanitized map",
+        "public_evolution": "bounded sanitized map",
+        "public_metrics": "bounded sanitized map",
+        "published_at": "Timestamp?",
+        "published_by": "private operator UID?",
+        "source_provenance": "REAL_MODEL_EXECUTION|DETERMINISTIC_ONLY (clearly labeled)"
+      },
+      "links": [
+        "datasets",
+        "pipeline_runs"
+      ]
+    },
+    {
+      "name": "usage_daily",
+      "purpose": "Daily attempt reservation and kill switch; ledger stays in step_runs",
+      "document_id": "YYYY-MM-DD UTC",
+      "writer": "model gateway transaction",
+      "immutable": false,
+      "fields": {
+        "day_utc": "string",
+        "attempts_reserved": "integer <= 120",
+        "limit": "integer = 120",
+        "live_enabled": "boolean",
+        "credit_verified_until": "Timestamp?",
+        "revision": "integer",
+        "reserved_attempt_ids": "bounded step_runs IDs"
+      },
+      "links": [
+        "step_runs"
+      ]
+    }
+  ],
+  "relational_ddl_equivalent": {
+    "primary_keys": "document_id",
+    "foreign_keys": "links and named *_id fields, checked by backend",
+    "unique_keys": [
+      "alerts(dataset_id, trigger_transaction_id, rule_id)",
+      "step_runs(run_id, leg_id, attempt_number)",
+      "feedback_events(alert_id, revision)"
+    ],
+    "checks": [
+      "scores in [0,1]",
+      "risk weights sum to 1",
+      "amounts are integer minor units",
+      "every run pins an immutable BUNDLE",
+      "no activation of recommendations",
+      "unknown costs/tokens remain null",
+      "HOLDOUT labels excluded from model inputs"
+    ]
+  },
+  "indexes": [
+    [
+      "transactions",
+      [
+        "dataset_id:ASCENDING",
+        "account_id:ASCENDING",
+        "occurred_at:ASCENDING"
+      ]
+    ],
+    [
+      "alerts",
+      [
+        "dataset_id:ASCENDING",
+        "status:ASCENDING",
+        "created_at:DESCENDING"
+      ]
+    ],
+    [
+      "pipeline_runs",
+      [
+        "parent_run_id:ASCENDING",
+        "created_at:ASCENDING"
+      ]
+    ],
+    [
+      "step_runs",
+      [
+        "run_id:ASCENDING",
+        "leg_id:ASCENDING",
+        "attempt_number:ASCENDING"
+      ]
+    ],
+    [
+      "step_runs",
+      [
+        "dataset_id:ASCENDING",
+        "leg_id:ASCENDING",
+        "started_at:ASCENDING"
+      ]
+    ],
+    [
+      "feedback_events",
+      [
+        "dataset_id:ASCENDING",
+        "alert_id:ASCENDING",
+        "revision:DESCENDING"
+      ]
+    ],
+    [
+      "evolution_runs",
+      [
+        "dataset_id:ASCENDING",
+        "cutoff_at:DESCENDING"
+      ]
+    ],
+    [
+      "recommendations",
+      [
+        "evolution_run_id:ASCENDING",
+        "state:ASCENDING"
+      ]
+    ],
+    [
+      "audit_events",
+      [
+        "run_id:ASCENDING",
+        "occurred_at:ASCENDING"
+      ]
+    ]
+  ],
+  "index_exemptions": [
+    "step_runs.input_snapshot",
+    "step_runs.output",
+    "step_runs.provider_usage_raw",
+    "datasets.reference_labels",
+    "datasets.split_manifest",
+    "config_versions.body",
+    "publications.public_cases",
+    "publications.public_evolution",
+    "publications.public_metrics",
+    "evaluations.metrics",
+    "simulations.baseline_case_detection",
+    "simulations.candidate_case_detection"
+  ]
+}

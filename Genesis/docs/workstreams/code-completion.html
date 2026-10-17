@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Genesis · Agent 2 · Code completion checklist</title>
+<style>
+:root{color-scheme:light;--nav:#101c31;--blue:#315dea;--paper:#f3f5f9;--ink:#17243b;--muted:#52647e;--line:#dce3ee}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 "Segoe UI",Arial,sans-serif}h1,h2,h3{font-family:Bahnschrift,"Segoe UI",sans-serif;line-height:1.2}h1{font-size:clamp(32px,5vw,52px);max-width:860px;margin:12px 0 20px}h2{font-size:27px;margin:0 0 16px}h3{font-size:21px;margin:10px 0}a{color:#2448b5;text-underline-offset:3px}a:hover{color:#122f81}a:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-offset:4px}header{background:var(--nav);color:white;padding:46px max(22px,calc((100vw - 1180px)/2))}header a{color:#cad6ff}header p{max-width:890px}.eyebrow{text-transform:uppercase;letter-spacing:2px;font-size:13px;color:#c0d0ff;font-weight:700}.badge{display:inline-block;border:1px solid #7185a4;padding:4px 10px;border-radius:5px;font-size:13px}.shell{max-width:1224px;margin:auto;padding:28px 22px 56px;display:grid;grid-template-columns:224px minmax(0,1fr);gap:26px}nav{align-self:start;position:sticky;top:18px;background:white;border:1px solid var(--line);border-radius:10px;padding:18px}nav ol{padding-left:24px}nav li{margin:8px 0}main{min-width:0}section{background:white;border:1px solid var(--line);border-radius:10px;margin-bottom:22px;padding:26px}p{margin:10px 0}li{margin:7px 0}.meta,.small{font-size:14px;color:var(--muted)}.id{color:var(--blue);font-weight:700;letter-spacing:.5px;font-size:14px}.callout{background:#edf2ff;border-left:4px solid var(--blue);padding:14px 18px;margin:18px 0}.gate{background:#fff5e5;border-left:4px solid #a86b12;padding:14px 18px;margin:18px 0}.task{border-top:1px solid var(--line);padding-top:22px;margin-top:24px}.task:first-of-type{border-top:0;padding-top:0}.check{display:flex;align-items:flex-start;gap:12px;margin:14px 0;padding:12px 0;border-top:1px solid var(--line);font-weight:600}input[type=checkbox]{width:20px;height:20px;flex:none;margin:4px 0 0;accent-color:var(--blue)}code,pre{font:13px/1.6 "Cascadia Code",Consolas,monospace}code{overflow-wrap:anywhere}pre{background:var(--nav);color:#edf2ff;padding:16px;border-radius:8px;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto}details{border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin:14px 0}summary{cursor:pointer;font-weight:600}summary:hover{color:var(--blue)}.table-wrap{overflow:auto;margin:16px 0}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid var(--line)}th{background:var(--paper)}dl{margin:14px 0}dt{font-weight:700;margin-top:10px}dd{margin:3px 0 10px}footer{font-size:14px;color:var(--muted);padding:8px}.skip{position:absolute;left:16px;top:-100px;background:white;padding:10px;z-index:2}.skip:focus{top:10px}html{scroll-padding-top:20px}@media(max-width:850px){.shell{grid-template-columns:minmax(0,1fr)}nav{position:static}nav ol{columns:2}section{padding:22px 18px}}@media(max-width:480px){header{padding:30px 20px}.shell{padding:18px 12px}nav ol{columns:1}}@media print{body{background:white;font-size:10pt}header{background:white;color:var(--ink);padding:0 0 16px}header a,.eyebrow{color:var(--ink)}nav,.skip{display:none}.shell{display:block;padding:0}section{border:0;border-radius:0;padding:14px 0;break-inside:auto}.task,h2,h3,summary{break-after:avoid}.check{break-inside:avoid}details{display:block}details>*{display:block!important}pre{white-space:pre-wrap;background:#f3f5f9;color:var(--ink)}a{color:inherit}.table-wrap{overflow:visible}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to checklist</a>
+<header>
+  <div class="eyebrow">Genesis / Two-agent delivery / Agent 2</div>
+  <h1>Finish the code. Prove the result.</h1>
+  <p>Ordered work for the coding agent, based on the actual repository and current official documentation. Reuse the existing engine, SDK, ledger, validators and UI. The four local code gaps are closed. Complete image execution and the remaining infrastructure handoffs before application deployment.</p>
+  <p><span class="badge">Reviewed 17 October 2026 · Australia/Sydney</span> <span class="badge">Local preparation only</span></p>
+  <p><a href="infrastructure.html">Agent 1: Infrastructure checklist →</a> · <a href="../../submission/deployed-prototype/resource-setup-guide.html">Detailed resource setup guide</a></p>
+</header>
+<div class="shell">
+<nav aria-label="Page contents">
+  <strong>Agent 2 checklist</strong>
+  <ol><li><a href="#baseline">Actual starting point</a></li><li><a href="#local">Local code quick wins</a></li><li><a href="#verification">Verification commands</a></li><li><a href="#integration">Integration and genuine evidence</a></li><li><a href="#handoff">Two-agent handoffs</a></li><li><a href="#release">Release acceptance</a></li><li><a href="#sources">Sources and limits</a></li></ol>
+</nav>
+<main id="main">
+<section id="current-verification"><h2>Current evidence — 17 October 2026</h2><p>This supersedes the historical starting points below. Replacement build <code>a8278142-5a7e-4a24-a90d-df32f5aa780b</code> succeeded; both private Sydney services passed image, identity, scale and access checks. Cloud AI and task dispatch remain off.</p><p>Local Free Tier completed Demo 007's two alert chains with six genuine provider steps. The user saved a true-positive review; its immutable analytical snapshot reports one conclusive review and zero target-rule reviews. A5, explicit candidate freeze and held-out comparison remain pending. Today's 12-attempt local cap is exhausted.</p><p>Google popup sign-in, selected citation IDs and explicit currency-unit instructions are implemented locally. Unit, fresh-emulator, browser/build and audit evidence is in <a href="../implementation-status.md">implementation status</a>. Production npm audit: zero findings after the patched gRPC pin. Development-tool findings and image scanning remain separate. The newer code is not deployed.</p></section>
+<section id="baseline">
+<div class="callout"><strong>Approved Cloud Build completed, 17 October:</strong> <code>fbca029c-cde5-41a3-9eba-99dee9b03e54</code> succeeded. Web/worker images were pushed and their digests read back; both passed network-isolated non-root startup and private-access checks. <a href="../deployment-recovery.md">Actual resource and image handoff</a>. No Cloud Run deployment/live AI occurred. Image vulnerability assessment and genuine/deployed evidence remain pending.</div>
+
+  <h2>Start from what already exists</h2>
+  <p><strong>G01–G14 complete; G15–G16 gated; G17–G29 partial; G30 pending.</strong> Partial often means implemented locally but missing genuine execution or deployed evidence. Do not rebuild completed features to make the checklist look busy.</p>
+  <div class="table-wrap"><table><caption>Verified local code batch — 17 October 2026</caption><thead><tr><th scope="col">Area</th><th scope="col">Recorded status</th></tr></thead><tbody>
+  <tr><td>Unit verification</td><td>70 passed; eleven emulator-only tests skipped in this run and executed separately.</td></tr>
+  <tr><td>Emulator integration</td><td>Eleven passed, zero skips; project <code>demo-aml-insight</code> only.</td></tr>
+  <tr><td>Frontend</td><td>Production build, browser journeys, cloud-auth failure doubles and design checks passed in the implementation record.</td></tr>
+  <tr><td>Cloud implementation</td><td>SDK branch, cloud sign-in, authenticated private worker, Cloud Tasks dispatcher, 300-second lease / 240-second execution bound and one restricted retry are code-prepared. Real cloud integration is unverified.</td></tr>
+  <tr><td>Local code completion</td><td>CODE01–CODE04 implemented and locally verified: source publisher, frozen rate-card accounting, genuine reference capture and safe export/link closure. CODE05 image build/startup is now verified in the user-approved Cloud Build route; image vulnerability assessment remains unrun.</td></tr>
+  <tr><td>Genuine evidence</td><td>Local Demo 007 completed both alert chains; one user true-positive review and an immutable analytical snapshot exist. A5, candidate freeze, held-out comparison and public release remain pending. A recorded currency wording error demonstrates why source-ID checks still require semantic review.</td></tr>
+  </tbody></table></div>
+  <p class="small">Source: <a href="../implementation-status.md">implementation status</a> and <a href="../evaluation-record.json">evaluation record</a>. Base Git revision <code>c5595b958896c93455bc57bd60cfc6e70292e2dd</code>, dirty worktree; tested code fingerprint <code>6cd03b64cc2d6616ee4ba4465c301453520c5a4bf572ff7b63e49549ccbaf426</code>. This is not a release revision.</p>
+  <div class="gate"><strong>No-spend and local-first boundary.</strong> This file authorizes no provider call, resource creation, deployment, service enablement or publication. Billing linkage does not verify credits. Keep live/task switches disabled; infra can inventory and verify coverage while code work proceeds.</div>
+  <p class="small">Checkboxes are temporary working aids; nothing is saved to browser storage. Record durable completion and evidence in the existing task list and implementation status after each batch. CODE01–CODE04 are checked from actual local evidence. Actual cloud image build/startup is verified; remaining image/runtime and full M1 handoff checks stay explicit.</p>
+</section>
+
+<section id="local">
+  <h2>Local code quick wins — CODE01–CODE04 verified</h2>
+  <div class="callout"><strong>Code batch complete:</strong> 70 unit passes, 11 fresh-emulator integration passes with zero integration skips, production build and browser journeys passed. <a href="../local-integration-handoff.md">Exact setup/configuration handoff</a>. No cloud action, secret access or model request was performed by this code batch. Image execution remains unverified.</div>
+  <article class="task" id="code01">
+    <div class="id">CODE01 · G27 · Locally verified implementation · Agent 2</div>
+    <h3>Build a separate, refusing cloud source publisher</h3>
+    <p><strong>Do:</strong> add the smallest explicit publication command, reusing <code>public_cases()</code>, <code>generate_dataset()</code>, baseline versioning and <code>Repository.publish()</code>. Validate the target project/database, approved manifest and current source before writes. Provide a read-only dry run; actual cloud writes remain separately gated.</p>
+    <p>Preserve the local seeder's cloud refusal and emulator-only test identities. The publisher must never create fixture users or upload local attempts, reviews, tokens or emulator exports. Publish deterministic DEMO cases only; held-out labels stay private. Check existing dataset state/hash before writing, refuse incompatible sources, and finish a valid initial source load before exposing its public pointer. A failed preparation must leave the prior active publication intact.</p>
+    <p class="meta"><strong>Touch:</strong> one new publisher entry point plus the minimum reuse in <a href="../../backend/seed.py">backend/seed.py</a> and <a href="../../backend/repository.py">repository.py</a>; focused checks in existing test structure. Do not remove or generalize the <code>seed()</code> local-only guard.</p>
+    <details open><summary>Acceptance and evidence</summary><ul><li>Dry run creates no writes. Wrong project, manifest mismatch and unready/conflicting source refuse.</li><li>Fresh and existing demo-backed persistence checks; failed/staged preparation never activates a partial dataset.</li><li>Repeated unchanged publication preserves pointer and source records, including immutable configurations.</li><li>Document the new command only after it exists; actual cloud publication awaits the infra handoff and explicit release authorization.</li></ul></details>
+    <label class="check"><input type="checkbox" checked><span>CODE01 accepted: safe publisher and local checks, cloud guard retained; no cloud write performed.</span></label>
+  </article>
+
+  <article class="task" id="code02">
+    <div class="id">CODE02 · G17/G26 · Locally verified implementation · Agent 2 + Agent 1 facts</div>
+    <h3>Finish measured accounting without inventing prices</h3>
+    <p><strong>Do:</strong> add a small immutable rate-card record and deterministic integer-micro-USD calculation in the existing gateway/accounting path. Pin model, provider, location, applicable service/SKU, category units, source and effective date. Include its identity in frozen configuration and applicable step provenance. Until infra verifies the exact rate card, keep estimates and its ID null and cost <code>UNKNOWN</code>.</p>
+    <p><strong>Implemented:</strong> <a href="../../backend/pricing.py">pricing.py</a> validates and freezes reviewed cloud rate cards. The existing gateway and attempt ledger pin the card and calculate integer micro-USD only for applicable reconciled usage. Provider tier, model/location, effective interval and supported categories must match. Actual prices remain unverified; missing or ambiguous usage stays unknown.</p>
+    <p class="meta"><strong>Dependency:</strong> synthetic arithmetic/refusal checks can proceed now; real applicability needs Agent 1's verified pricing/model/location handoff. Latest official <a href="https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing">cloud model pricing</a> must be checked at activation rather than copied as a blanket rate.</p>
+    <details open><summary>Acceptance and evidence</summary><ul><li>Exact known category example, rounding and combined multi-alert/retry totals are reproducible.</li><li>Missing category, overlapping semantics, wrong model/location, expired/inapplicable rate card and unknown provider outcome remain unknown.</li><li><code>NOT_SENT</code> remains not applicable with null tokens/cost, no reservation; no guessed zero cost.</li><li>Public APIs still exclude output and private metadata. Usage rendering draws segments only when categories reconcile.</li></ul></details>
+    <label class="check"><input type="checkbox" checked><span>CODE02 accepted: pricing arithmetic checked locally; unverified applicability still refuses an estimate.</span></label>
+  </article>
+
+  <article class="task" id="code03">
+    <div class="id">CODE03 · G26 · Locally verified implementation · Agent 2</div>
+    <h3>Capture actual release evidence without overwriting it</h3>
+    <p><strong>Do:</strong> extend <a href="../../scripts/capture_evaluation.py">capture_evaluation.py</a> with an explicit, validated path for real run IDs, feedback events, A5, frozen candidate, comparison, cloud revision IDs and final links. The implemented path preserves sanitized existing references with their original source binding. Optional explicit funded repository reads verify a real child investigation, human feedback, A5, freeze and comparison against the frozen source/configuration. Normal capture makes no cloud read, and <code>release_ready=false</code> remains mandatory; actual artifact and eligibility checks are separate.</p>
+    <p>Keep local test provenance separate from approved live evidence. Validate links among dataset/configuration/attempts, schema/evidence status and real-provider provenance; record manual grounding as a human assertion with its provenance. Refuse stale code fingerprint and unrelated run/candidate records. Keep incomplete records honest; no unconditional ready flag.</p>
+    <p class="meta"><strong>Touch:</strong> existing capture script, <a href="../evaluation-record.json">evaluation record</a>, and minimal validation checks. Add no parallel ledger or generic evidence framework.</p>
+    <details open><summary>Acceptance and evidence</summary><ul><li>Local-only capture remains clearly local and cannot fill genuine evidence from fault doubles.</li><li>Missing/failed/unknown/mismatched steps or held-out ownership cannot make the release record complete.</li><li>Repeat capture preserves valid separately supplied real evidence; a source change makes stale verification explicit.</li><li>Human feedback and candidate freeze cannot be manufactured or inferred by the capture script.</li></ul></details>
+    <label class="check"><input type="checkbox" checked><span>CODE03 accepted: genuine-evidence capture checked; pending live fields remain pending.</span></label>
+  </article>
+
+  <article class="task" id="code04">
+    <div class="id">CODE04 · G29 · Locally verified packaging · Agent 2</div>
+    <h3>Make the exported repository complete and safe</h3>
+    <p><strong>Do:</strong> extend the exact allowlist in <a href="../../scripts/export_source.py">export_source.py</a> only for the selected final public submission docs/assets. The exporter now includes exact reviewed public text/HTML paths and validates relative targets and HTML anchors against the actual archive. It never recursively includes submission drafts or binary archives. Keep internal <code>context/</code>, local PDFs/caches, private generated evidence, credentials, logs and environments excluded. The deliberately public, sanitized <code>docs/evaluation-record.json</code> remains an explicit allowed document; inspect its contents before export.</p>
+    <p class="meta"><strong>Dependency:</strong> settle source/docs first; rerun verification before regenerating the final archive. Preserve prior archives. No repository creation, push, license grant or publication in this task.</p>
+    <details open><summary>Acceptance and evidence</summary><ul><li>Local archive contains required application sources, locks, exact selected docs and no secrets/private data.</li><li>Traversal, linked-file and credential-pattern refusals remain enforced; included local links resolve.</li><li>Repeat export is byte-for-byte deterministic for unchanged inputs; per-file SHA256s and ZIP checks pass.</li><li>Manifest identifies the actual tested source and remains preparation-only until authorized release.</li></ul></details>
+    <label class="check"><input type="checkbox" checked><span>CODE04 accepted: source archive is reproducible, complete for its documented scope and private-file safe.</span></label>
+  </article>
+
+  <article class="task" id="code05">
+    <div class="id">CODE05 · G25/G27 · Runtime proof pending · Agent 2 + local tooling prerequisite</div>
+    <h3>Record actual container execution and remaining image checks</h3>
+    <p><strong>Do:</strong> use an available, approved local container engine to build the existing <code>web</code> and <code>worker</code> targets. The <a href="../../Dockerfile">Dockerfile</a> already exists; the user subsequently authorized a single Cloud Build in place of the unavailable local engine; that build and startup evidence now pass. Record image digests, startup checks, runtime dependency/image findings and remediation decisions.</p>
+    <p>Verify non-root execution, port handling, disabled live/task switches, health/startup behavior, frontend serving, private-worker authentication refusal before database access and no secrets baked into layers. Local containers connect only to demo emulators when exercising persistence. The cloud server must bind to <code>0.0.0.0</code> and its configured <code>PORT</code>; see the <a href="https://docs.cloud.google.com/run/docs/container-contract">Cloud Run container contract</a>.</p>
+    <details open><summary>Build commands — run only after the local engine is available</summary><pre><code># Working directory: Genesis
+docker build --platform linux/amd64 --target web -t genesis-web:local .
+docker build --platform linux/amd64 --target worker -t genesis-worker:local .
+docker image inspect genesis-web:local genesis-worker:local</code></pre><p class="small">These commands build local images; they do not deploy. Base-image downloads need network access. Engine installation or elevated permissions follow the normal approval process. No build is claimed in this checklist.</p></details>
+    <label class="check"><input type="checkbox"><span>CODE05: actual web/worker build, startup and pushed digest evidence pass in Cloud Build; local engine remains absent and image vulnerability assessment is pending.</span></label>
+  </article>
+</section>
+
+<section id="verification">
+  <h2>CODE06 · Verify one stable local revision</h2>
+  <p class="meta">Agent 2 · G25–G27 · after CODE01–CODE05; a missing engine is an explicit incomplete item, not a passing runtime check.</p>
+  <p>Run focused checks while editing. After the batch stabilizes, use existing commands once for full evidence. Do not edit fingerprinted application/config/scripts while the integration suite is running. An integration skip does not count as emulator evidence.</p>
+  <details open><summary>Existing PowerShell commands — all from Genesis</summary><pre><code>.venv/Scripts/python.exe scripts/capture_evaluation.py --run-unit
+if ($LASTEXITCODE -ne 0) { throw 'Unit verification failed' }
+$previousPytestAddopts = $env:PYTEST_ADDOPTS
+try {
+    $env:PYTEST_ADDOPTS = '--junitxml=.cache/integration-results.xml'
+    npm.cmd run test:integration
+    if ($LASTEXITCODE -ne 0) { throw 'Integration verification failed' }
+} finally {
+    if ($null -eq $previousPytestAddopts) {
+        Remove-Item Env:PYTEST_ADDOPTS -ErrorAction SilentlyContinue
+    } else {
+        $env:PYTEST_ADDOPTS = $previousPytestAddopts
+    }
+}
+npm.cmd run build
+if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+# Follow the current browser script's local API/emulator prerequisites:
+npm.cmd run test:browser
+if ($LASTEXITCODE -ne 0) { throw 'Browser verification failed' }
+.venv/Scripts/python.exe scripts/capture_evaluation.py
+if ($LASTEXITCODE -ne 0) { throw 'Evidence capture failed' }
+.venv/Scripts/python.exe -m scripts.export_source
+if ($LASTEXITCODE -ne 0) { throw 'Source export failed' }</code></pre><p class="small">Run this block as one script so a thrown failure stops later commands. Do not start duplicate emulator instances. The integration script owns/stops its fresh loopback demo emulators. Browser checks need their documented local API/seed setup; see <a href="../../README.md">README</a> and <a href="../../scripts/check-browser.cjs">check-browser.cjs</a>. Run the existing design checks if frontend changes occur, using the project design skills/context.</p></details>
+  <ul><li>Confirm nine detector rules and manifest <code>9f297c1dd06ef395d9dad851348d15c5ffa4db95cedb49dc4ad7b5b36130dfa0</code> remain unchanged: 112 synthetic cases, 12 public DEMO cases.</li><li>Recheck operator/admin/session boundaries, selected-alert feedback, dirty notes, cancellation, explicit refresh, private output and direct Firestore denial.</li><li>Preserve one-at-most linked transient retry; unknown outcomes, credit/cap refusals and absent validated output never proceed downstream.</li><li>Record actual pass/skip/failure counts, source fingerprint and artifact hashes. Review the existing eight development-inclusive npm findings and runtime-image exposure; do not force-upgrade unrelated packages.</li></ul>
+  <label class="check"><input type="checkbox"><span>CODE06: native unit/emulator/build/browser checks pass against this source; approved Cloud Build image execution also passes; remaining image/runtime and full M1 handoff checks stay pending.</span></label>
+</section>
+
+<section id="integration">
+  <h2>Then prove the prepared integration</h2>
+  <article class="task" id="code07">
+    <div class="id">CODE07 · G16/G18/G20/G28 · Actual cloud proof pending · Agents 1 + 2</div>
+    <h3>Validate deployed identities, delivery and recovery</h3>
+    <p><strong>Wait for M1 and Agent 1's approved setup.</strong> Consume the exact project/default database, verified model/location, funding expiry, applicable rate card, Firebase public configuration and UIDs, private worker URL/audience, queue path and scoped runtime/task identities. Never guess these values or reuse a Developer API secret as Firebase configuration.</p>
+    <p>Keep AI disabled while checking public deterministic reads, cloud sign-in, operator versus admin access, invalid/expired sessions, public aggregate usage and worker denial to signed-out/forged delivery. Then, within the specifically approved bounded execution window, verify real Cloud Tasks OIDC/IAM, delivery, generation deduplication, lease fencing, explicit refresh and recovery. Do not deliberately create an unknown billed outcome just to test one; retain local fault evidence for destructive or unpredictable scenarios.</p>
+    <p class="meta"><strong>Reuse:</strong> <a href="../../backend/dispatch.py">dispatch.py</a>, <a href="../../backend/worker.py">worker.py</a>, <a href="../../backend/jobs.py">jobs.py</a>, <a href="../../backend/config.py">config.py</a> and current sign-in. SDK cloud construction and Firebase email/password endpoint are already implemented; validate configuration and actual operation before changing working code. Official references: <a href="https://googleapis.github.io/python-genai/">Gen AI SDK</a>, <a href="https://firebase.google.com/docs/reference/rest/auth#section-sign-in-email-password">Firebase Auth REST</a>.</p>
+    <label class="check"><input type="checkbox"><span>CODE07 accepted: actual revision IDs, signed-out/private access and authenticated delivery evidence recorded.</span></label>
+  </article>
+
+  <article class="task" id="code08">
+    <div class="id">CODE08 · G19–G20 · Genuine execution pending · Agent 2 with user approval</div>
+    <h3>Complete one genuine investigation and inspect it manually</h3>
+    <p>After funding/service coverage and a bounded call budget are verified, obtain approval for that concrete live run. Use the operator workflow to enqueue every alert on one DEMO case. Record the real parent/child IDs and sealed A1 → A2 → A3 → A4 → A0 chain. Inspect the private brief against its actual cited evidence, protected signals, missing context, required schema and length limits. Record measured provider categories, reservations and applicable estimate or explicit unknown cost.</p>
+    <p class="meta"><strong>Exact input/output caps:</strong> A2 4096/1536; A3 2048/768; A4 4096/2048. A failed/unknown leg prevents downstream work and feedback. A successful connectivity probe or fault double never satisfies this item.</p>
+    <label class="check"><input type="checkbox"><span>CODE08 accepted: one genuine complete chain, private validated brief, accounting and human grounding evidence.</span></label>
+  </article>
+
+  <article class="task" id="code09">
+    <div class="id">CODE09 · G21–G24 · Genuine/user evidence pending · User owns verdict and freeze</div>
+    <h3>Capture real feedback, A5 and the single held-out comparison</h3>
+    <ol><li><strong>User:</strong> submit a genuine analyst verdict/notes against the completed run. The coding agent can help inspect the evidence but cannot supply the human decision.</li><li><strong>Agent 2:</strong> capture immutable analytical inputs and run one specifically approved real A5 using the existing workflow, capped at 8192/3072 input/output tokens.</li><li><strong>Code decides sufficiency:</strong> 30 conclusive reviews overall and 15 for the target rule. Store actual counts; <code>INSUFFICIENT_EVIDENCE</code> satisfies the demo requirement and does not justify a supported proposal.</li><li><strong>User:</strong> explicitly freeze an existing allowlisted detector candidate. If unsupported by sufficient feedback, label it accordingly. Persist its hash before held-out access; no agent chooses or freezes on the user's behalf.</li><li><strong>Agent 2:</strong> invoke the existing stored simulation once for that frozen candidate, verify repeats return it, and record denominators, unavailable metrics and other-rule retention. No tuning from held-out results or automatic activation.</li></ol>
+    <p class="meta"><strong>Reuse:</strong> <a href="../../backend/repository.py">snapshot/freeze/simulation persistence</a> and existing Evolution UI. Recommendation-only scope remains. Optional prompt/skill/weight optimization stays <code>UNEVALUATED</code> unless genuinely run.</p>
+    <label class="check"><input type="checkbox"><span>CODE09 accepted: real feedback, genuine A5, user freeze and one immutable held-out result with provenance.</span></label>
+  </article>
+</section>
+
+<section id="handoff">
+  <h2>Two agents, four shared milestones</h2>
+  <p>Agent 1 owns infrastructure facts/setup and deployed resource identity. Agent 2 owns local code, tests, publication tooling and application validation. Both use the same frozen inputs and recorded configuration; neither activates billing or invents the user's analyst decisions.</p>
+  <div class="table-wrap"><table><thead><tr><th scope="col">Milestone</th><th scope="col">Agent 1 gives</th><th scope="col">Agent 2 gives</th></tr></thead><tbody>
+  <tr><td><strong>M1 · Local ready</strong><br>Before provisioning</td><td>Inventory, coverage/eligibility findings, proposed names and reviewed setup plan. Research can happen in parallel.</td><td>Publisher/accounting/evidence/export gaps closed; matching local checks and actual container build evidence. If unavailable, mark the blocker rather than bypass it.</td></tr>
+  <tr><td><strong>M2 · Integration ready</strong><br>After approved setup</td><td>Exact verified cloud settings, identities, IAM, paused queue, private audience, image/revision IDs and funding/model/rate-card facts.</td><td>Disabled-mode deployment checks, safe source publication, auth and actual delivery evidence; concrete bounded live-run request.</td></tr>
+  <tr><td><strong>M3 · Genuine evidence</strong></td><td>Covered execution window, service health, recovery and evaluation-period availability plan.</td><td>Real investigation, manual grounding, measured usage, real A5 and stored held-out comparison. User supplies verdict and freeze.</td></tr>
+  <tr><td><strong>M4 · Submission ready</strong></td><td>Working signed-out public URL and verified retention/monitoring; no private worker exposure.</td><td>Matching final source/evaluation, prescribed-template deck, measured video and truthful description; complete signed-out artifact checks.</td></tr>
+  </tbody></table></div>
+  <div class="callout"><strong>Shortest safe path:</strong> no replacement framework, extra dashboard, new agent architecture or duplicate ledger. Fix only the demonstrated code gaps, verify the existing prepared path, then collect the missing genuine evidence.</div>
+</section>
+
+<section id="release">
+  <h2>CODE10 · Close the five submission deliverables</h2>
+  <p class="meta">Agent 2 + Agent 1 · G25–G30 · after M3; publication/submission requires the final authorized release step.</p>
+  <p>Use <a href="../../submission/README.md">the existing submission folders/checklists</a>. Final evidence must match the actual tested/deployed revision. Do not treat these planning HTML files, a source draft or local fault checks as completion of G17–G30.</p>
+  <dl><dt><a href="../../submission/pitch-deck/README.md">Pitch deck</a></dt><dd>Obtain the prescribed template and migrate verified content. The custom eight-page PDF is a draft, not proof of template compliance.</dd><dt><a href="../../submission/demo-video/README.md">Demo video</a></dt><dd>Record the real working journeys and measure a duration below 180 seconds. The 150-second script is not a recording.</dd><dt><a href="../../submission/deployed-prototype/README.md">Live prototype</a></dt><dd>Record the signed-out public URL and actual web/worker revision IDs; verify availability through the organizer's evaluation period with Agent 1.</dd><dt><a href="../../submission/github-repository/README.md">Accessible GitHub repository</a></dt><dd>Publish only the reviewed clean final export to the confirmed destination; test anonymous access and relative links.</dd><dt><a href="../../submission/description/README.md">Brief description</a></dt><dd>Match final implemented behavior and actual evidence; respect portal limits and omit unmeasured improvement claims.</dd></dl>
+  <p><strong>User-reported dashboard cutoff:</strong> 18 October 2026, 11:59 PM India Standard Time (UTC+05:30), equivalent to 19 October, 05:29 AEDT Sydney. The public date does not independently verify the reported clock time. Recheck actual portal/eligibility fields before submitting.</p>
+  <label class="check"><input type="checkbox"><span>CODE10 accepted: final links work signed out, actual evidence is recorded, user-authorized publication/submission outcome captured.</span></label>
+</section>
+
+<section id="sources">
+  <h2>Review basis and current limits</h2>
+  <p>Repository inspection and official references reviewed on <strong>17 October 2026</strong>. Docs can change; confirm the exact funded model, supported location, pricing and runtime settings again at the deployment checkpoint. No model substitution or dependency upgrade is implied.</p>
+  <ul><li><a href="../implementation-status.md">Implementation status</a>, <a href="../evaluation-record.json">evaluation record</a>, <a href="../../backend/gateway.py">gateway</a>, <a href="../../backend/jobs.py">jobs</a>, <a href="../../backend/repository.py">repository</a>, <a href="../../backend/config.py">settings</a>, <a href="../../backend/seed.py">local seeder</a>, <a href="../../tests/test_integration.py">integration tests</a>, <a href="../../scripts/capture_evaluation.py">evidence capture</a>, <a href="../../scripts/export_source.py">source exporter</a> and <a href="../../Dockerfile">Dockerfile</a> establish the current code baseline.</li><li><a href="https://googleapis.github.io/python-genai/">Official Google Gen AI Python SDK documentation</a> supports explicit cloud versus Developer API transport and API version selection. Installed behavior still needs actual cloud authentication/integration evidence.</li><li><a href="https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing">Official cloud model pricing</a>, <a href="https://docs.cloud.google.com/run/docs/container-contract">Cloud Run container contract</a> and <a href="https://firebase.google.com/docs/reference/rest/auth#section-sign-in-email-password">Firebase Auth REST documentation</a> guide the relevant checks, not proof that this project is funded or deployed.</li><li><a href="https://aibuildercup.com/">AI Builder Cup</a> and the user's supplied submission reminder define the submission context. Agent 1's <a href="infrastructure.html">infrastructure checklist</a> records the current event/deployment requirements and remaining dashboard confirmations.</li></ul>
+  <p class="small">This file makes no network requests, stores no browser state and creates no resources. External links open only when followed. File links assume this document remains under <code>Genesis/docs/workstreams/</code>.</p>
+</section>
+<footer>Agent 2 · Code completion · Ponytail approach: reuse, finish the proven gaps, verify, then collect genuine evidence.</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AML Insight - submission deck draft</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; color: #17243b; background: #f3f5f9; font-family: "Segoe UI", Arial, sans-serif; }
+  .slide { width: 1280px; height: 720px; padding: 48px 64px 60px; position: relative; overflow: hidden; background: white; break-after: page; }
+  .slide:last-child { break-after: auto; }
+  .eyebrow { color: #315dea; font-size: 15px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin: 0 0 18px; }
+  h1, h2, h3 { font-family: Bahnschrift, "Segoe UI", sans-serif; }
+  h1 { font-size: 76px; line-height: 1.05; margin: 36px 0 24px; max-width: 1000px; }
+  h2 { font-size: 44px; line-height: 1.12; margin: 0 0 22px; max-width: 1080px; }
+  h3 { font-size: 23px; margin: 0 0 12px; }
+  p, li { font-size: 23px; line-height: 1.48; }
+  p { margin: 0 0 18px; }
+  ul { margin: 12px 0; padding-left: 25px; }
+  li { margin-bottom: 12px; }
+  .lead { font-size: 29px; max-width: 990px; line-height: 1.4; }
+  .muted { color: #627089; }
+  .small { font-size: 18px; line-height: 1.45; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 26px 0; }
+  .card { border: 1px solid #e2e7f0; border-radius: 14px; padding: 26px; background: #f3f5f9; }
+  .card p:last-child { margin-bottom: 0; }
+  .architecture .card { padding: 22px; }
+  .architecture .card > p:not(.small) { font-size: 21px; }
+  .tag { display: inline-block; font-size: 15px; font-weight: 700; border-radius: 6px; background: #edf1ff; color: #315dea; padding: 9px 12px; }
+  .warning { background: #fff5e5; color: #946019; padding: 14px 18px; border-radius: 8px; font-size: 18px; line-height: 1.4; }
+  footer { position: absolute; bottom: 24px; left: 64px; right: 64px; display: flex; justify-content: space-between; font-size: 13px; color: #627089; border-top: 1px solid #e2e7f0; padding-top: 12px; }
+  .dark { background: #101c31; color: white; }
+  .dark .eyebrow, .dark .muted { color: #aab9d0; }
+  .dark footer { color: #aab9d0; border-color: #34435d; }
+  .dark .tag { background: #203452; color: #cbd9ff; }
+  .pipeline { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin: 30px 0; }
+  .step { background: #f3f5f9; border-top: 5px solid #315dea; border-radius: 8px; padding: 18px 14px; min-height: 182px; }
+  .step strong { font-size: 32px; display: block; margin-bottom: 10px; }
+  .step span { font-size: 18px; display: block; line-height: 1.4; }
+  .stat { font-size: 64px; line-height: 1.1; font-weight: 700; color: #315dea; margin-bottom: 12px; }
+  .checks { grid-template-columns: repeat(3, 1fr); }
+  .mono { font: 16px/1.5 Consolas, monospace; overflow-wrap: anywhere; }
+  @media screen { .slide { margin: 0 auto 24px; } }
+  @media print { html, body { background: white; } }
+</style>
+</head>
+<body>
+<section class="slide dark">
+  <p class="eyebrow">Genesis / AML Insight</p>
+  <h1>Trace the evidence.<br>Make the review count.</h1>
+  <p class="lead">An investigation workspace that connects deterministic alerts, validated AI explanations and accountable human decisions.</p>
+  <p class="tag">Draft for review - 17 October 2026</p>
+  <p class="small muted" style="margin-top:24px">Local implementation verified. Genuine AML investigation, human review and deployment evidence are pending.</p>
+  <footer><span>DRAFT / Local evidence only / Recommendation-only prototype</span><span>01 / 08</span></footer>
+</section>
+<section class="slide">
+  <p class="eyebrow">The problem and intended value</p>
+  <h2>Alerts need a reviewable explanation.</h2>
+  <p class="lead">An analyst must connect transactions, rule signals and case context before deciding what deserves further investigation.</p>
+  <div class="grid">
+    <div class="card"><h3>Workflow problem</h3><p>Evidence, explanations and review decisions can become disconnected. An explanation without provenance adds another thing to verify.</p></div>
+    <div class="card"><h3>Product hypothesis</h3><p>Keep the evidence and review together. Show what is known, what failed and which human decision supports an evaluation.</p></div>
+  </div>
+  <p class="small muted">Target user: an AML analyst reviewing synthetic cases. Faster review and better precision are hypotheses to measure; no customer, productivity or financial outcome is claimed.</p>
+  <footer><span>DRAFT / Intended business value, not measured impact</span><span>02 / 08</span></footer>
+</section>
+<section class="slide">
+  <p class="eyebrow">Investigation to review</p>
+  <h2>One sealed step before the next.</h2>
+  <div class="pipeline">
+    <div class="step"><strong>A1</strong><span>Deterministic evidence enrichment</span></div>
+    <div class="step"><strong>A2</strong><span>AI explains code-owned risk arithmetic</span></div>
+    <div class="step"><strong>A3</strong><span>AI categorizes with bounded evidence</span></div>
+    <div class="step"><strong>A4</strong><span>AI drafts the private investigation brief</span></div>
+    <div class="step"><strong>A0</strong><span>Deterministic prioritization after validation</span></div>
+    <div class="step"><strong>A5</strong><span>Separate analysis of genuine human feedback</span></div>
+  </div>
+  <p>Schema, citation and protected-signal checks gate completion. A failure stops downstream execution and stays visible to the operator.</p>
+  <p class="warning">No genuine completed AML investigation is stored yet. Test failures and display fixtures do not count as successful AI output or human feedback.</p>
+  <footer><span>DRAFT / Implemented workflow; live investigation pending</span><span>03 / 08</span></footer>
+</section>
+<section class="slide architecture">
+  <p class="eyebrow">Architecture and boundaries</p>
+  <h2>Public evidence. Private investigation.</h2>
+  <div class="grid">
+    <div class="card"><h3>Public web and API</h3><p>Frozen deterministic cases and aggregate usage. No model narrative, private review or held-out labels in public reads.</p><p class="small muted">React + FastAPI / signed-out journey</p></div>
+    <div class="card"><h3>Operator and admin API</h3><p>Private reads, explicit enqueue and refresh, review history, immutable configuration and attempt ledger.</p><p class="small muted">Firestore / separate operator and admin allowlists</p></div>
+    <div class="card"><h3>Separate private worker</h3><p>Named Cloud Tasks delivery, authenticated invocation, 300-second lease and 240-second execution bound.</p><p class="small muted">Prepared code / real cloud delivery unverified</p></div>
+    <div class="card"><h3>Shared model gateway</h3><p>Explicit Developer or cloud transport. Exact input counting, atomic reservations, validators and measured usage.</p><p class="small muted">Gemini SDK / cloud execution disabled</p></div>
+  </div>
+  <footer><span>DRAFT / Architecture prepared; no deployed revision claimed</span><span>04 / 08</span></footer>
+</section>
+<section class="slide">
+  <p class="eyebrow">Controls that make failure visible</p>
+  <h2>Bound requests. Preserve uncertainty.</h2>
+  <div class="grid">
+    <div><h3>Before a request</h3><ul><li>Recheck mode, credits, expiry, switch, cap and worker lease.</li><li>Reserve each attempt atomically.</li><li>Freeze model, prompts and retry limits in immutable versions.</li></ul></div>
+    <div><h3>After a request</h3><ul><li>Seal the attempt before the next leg.</li><li>Permit one retry only for a known short transient rejection.</li><li>Keep unknown provider outcomes, usage and cost visibly unknown.</li></ul></div>
+  </div>
+  <p class="small muted">Input / generated-token caps: A2 4096 / 1536; A3 2048 / 768; A4 4096 / 2048; A5 8192 / 3072. Cloud daily maximum: 120 attempts, including retries. New UTC days start disabled.</p>
+  <p class="warning">A linked billing account does not establish credit coverage. No cloud deployment or additional live model call was made in this preparation batch.</p>
+  <footer><span>DRAFT / Usage estimates are not cloud invoices</span><span>05 / 08</span></footer>
+</section>
+<section class="slide">
+  <p class="eyebrow">Measured local verification</p>
+  <h2>What the current evidence establishes.</h2>
+  <div class="grid checks">
+    <div class="card"><div class="stat">43</div><h3>Unit tests passed</h3><p class="small">9 emulator-only checks run separately.</p></div>
+    <div class="card"><div class="stat">9</div><h3>Integration tests passed</h3><p class="small">Fresh local Auth / Firestore emulators. Zero integration skips.</p></div>
+    <div class="card"><div class="stat">112</div><h3>Frozen synthetic cases</h3><p class="small">40 discovery, 20 selection, 40 held-out, 12 public demo. Nine detector rules.</p></div>
+  </div>
+  <p class="small">Checks cover immutable publication, duplicate enqueue, access boundaries, real-ledger fault accounting, fenced delivery and refusal without fabricated model output.</p>
+  <p class="small muted">One earlier authorized Developer API connectivity smoke reported 74 tokens. It was not an AML investigation; cost remains unknown. Recorded dependency audits: zero production npm and installed Python findings; eight development-tool advisory entries remain for release review.</p>
+  <p class="mono">Provenance: docs/evaluation-record.json - local worktree fingerprint and actual JUnit results; release_ready = false.</p>
+  <footer><span>DRAFT / Local results are not deployed-cloud validation</span><span>06 / 08</span></footer>
+</section>
+<section class="slide">
+  <p class="eyebrow">Evolution without invented evidence</p>
+  <h2>Human reviews define the denominator.</h2>
+  <div class="grid">
+    <div class="card"><h3>Sufficiency is computed</h3><p>A supported detector proposal requires 30 conclusive reviews overall and 15 for the target rule. A5 can return INSUFFICIENT_EVIDENCE honestly.</p></div>
+    <div class="card"><h3>Freeze before held-out access</h3><p>The operator explicitly freezes an allowlisted candidate. Its hash precedes one stored, idempotent held-out simulation. Nothing activates automatically.</p></div>
+  </div>
+  <p>Measure analyst review time, conclusive-review counts, removed benign and suspicious alerts, and alerts retained by other rules.</p>
+  <p class="warning">Current genuine feedback, stored A5 and held-out comparison evidence are absent. No precision gain, time saving or detector improvement is claimed.</p>
+  <footer><span>DRAFT / Evaluation method prepared; outcomes unavailable</span><span>07 / 08</span></footer>
+</section>
+<section class="slide dark">
+  <p class="eyebrow">Release path</p>
+  <h2>Close the evidence gaps, then publish.</h2>
+  <ul>
+    <li>Verify funding, model / location, runtime identities and service coverage.</li>
+    <li>Complete one genuine investigation and manually ground its brief.</li>
+    <li>Capture your analyst verdict, real A5 and explicit candidate freeze; store the held-out comparison.</li>
+    <li>Build and deploy approved artifacts; verify signed-out and operator journeys.</li>
+    <li>Finalize the public repository, PDF and a video under three minutes.</li>
+  </ul>
+  <p class="small muted">This file is a local draft. No public demo, repository, video or submission URL is claimed. Replace draft evidence gaps only when actual stored results and deployed revision IDs exist.</p>
+  <footer><span>DRAFT / Publication and submission pending</span><span>08 / 08</span></footer>
+</section>
+</body>
+</html>

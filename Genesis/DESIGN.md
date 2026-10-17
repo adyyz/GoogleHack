@@ -88,6 +88,10 @@ Frontmatter radii map to `--radius-panel` and `--radius-control`. Panels use 14p
 
 ## Components
 
+Evolution evidence uses the existing panel rhythm, native form controls and shared confirmation dialog. Frozen-input counts and provenance lead; full candidate/snapshot hashes wrap as utility text. Private investigation prose uses the same source-ID treatment as the transaction trail. No visual token, font, chart palette or animation changes for these workflows.
+
+Gap closure retains this visual identity. `Dialog.tsx` owns native modal variants for sign-in, usage and confirmations. `Usage.tsx` owns the public/private usage renderer and the single parent completion notification. Token charts use the existing primary/success/warning/danger/muted colors with textual category labels; the provider total stays central. When data cannot reconcile, a restrained labeled unavailable surface replaces the chart. Operator review and Admin use existing panels and controls, platform-native select popups, document scrolling and bounded history tables. No new font, theme, motion or package is introduced.
+
 Shared CSS recipes own `.primary`, `.panel`, `.badge`, `.error`, `.search`, and `.nav-link`; `Icon.tsx` owns consistent outline SVGs. Every enabled action has hover, pressed and visible focus states. Disabled actions remain labeled with their reason. Busy actions preserve width. The canonical `SignIn` modal uses native dialog modality, focus restoration, inline validation, masked passwords and a show/hide control. No browser alert/confirm/prompt.
 
 Search is immediate over a fixed 12-case publication, with clear, count and no-results recovery. Loading uses a stable app-owned spinner region, never simulated progress. Risk bars share a 6px height and fully rounded ends; only their value-dependent widths differ. Empty scores render as unavailable. Completed workflow checks use the success green; pending and missing-context stages never receive a completion check.
@@ -97,6 +101,6 @@ Sidebar labels roll downward one character after another on hover, focus, and se
 ## Do's and Don'ts
 
 - Do keep evidence IDs, amounts and uncertainty legible at every viewport.
-- Do reuse the same panels, buttons, status tones and empty/error treatments across all three screens.
+- Do reuse the same panels, buttons, status tones and empty/error treatments across workspace screens.
 - Don't fabricate model outputs, cost savings, completed stages or human verdicts.
 - Don't replace a missing-context warning with a reassuring numerical score.
