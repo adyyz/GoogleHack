@@ -18,6 +18,16 @@ assert(target.protocol === 'http:' && target.hostname === '127.0.0.1' && target.
     await page.getByRole('heading', { name: 'Investigations', exact: true }).waitFor();
     await page.locator('.case-item').first().waitFor();
     assert.equal(await page.locator('.case-item').count(), 12);
+    await page.getByLabel('Identity type', { exact: true }).selectOption('INDIVIDUAL');
+    await expect(page.locator('.case-item')).toHaveCount(2);
+    const identity = await page.getByLabel('Identity', { exact: true }).locator('option').nth(1).getAttribute('value');
+    await page.getByLabel('Identity', { exact: true }).selectOption(identity);
+    await expect(page.locator('.case-item')).toHaveCount(1);
+    await page.getByLabel('Identity type', { exact: true }).focus();
+    await page.keyboard.press('ArrowDown'); await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
+    await expect(page.locator('.case-item')).toHaveCount(12);
+
     await page.getByRole('heading', { name: 'Usage', exact: true }).waitFor();
     await page.getByText('No model usage has been recorded.', { exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Admin', exact: true }).count(), 0);
@@ -169,16 +179,18 @@ assert(target.protocol === 'http:' && target.hostname === '127.0.0.1' && target.
     assert(await states.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile usage chart must fit');
     usageFixture = { ...usageFixture, categories: null, total_tokens: 130 };
     await states.getByRole('button', { name: 'Refresh usage', exact: true }).click();
-    await states.getByText('Token categories do not fully reconcile.', { exact: true }).waitFor();
+    await states.getByText('We have a token total, but not enough detail to split it into a chart. The available counts are listed below.', { exact: true }).waitFor();
     await expect(states.locator('.usage-chart')).toHaveCount(0);
     usageFixture = { ...usageFixture, total_tokens: null, unknown_attempts: 1, known_categories: Object.fromEntries(Object.keys(known).map(key => [key, null])) };
     await states.getByRole('button', { name: 'Refresh usage', exact: true }).click();
-    await expect(states.locator('.usage-values').getByText('Unknown', { exact: true })).toHaveCount(6);
+    await expect(states.locator('.usage-values').getByText('Unknown', { exact: true })).toHaveCount(3);
     await states.unroute('**/api/demo/usage');
     await states.getByRole('button', { name: 'Refresh usage', exact: true }).click();
     await states.getByText('No model usage has been recorded.', { exact: true }).waitFor();
     await states.close();
     await require('./check-evolution-browser.cjs')(browser, baseUrl);
+    await require('./check-review-policy-browser.cjs')(browser, baseUrl);
+    await require('./check-intelligence-browser.cjs')(browser, baseUrl);
     await require('./check-signin-browser.cjs')(browser, baseUrl);
     assert.deepEqual(errors, [], 'No browser JavaScript errors');
     console.log('Browser check passed: investigations, private briefs, feedback gates, parent toast/dialog focus, admin controls, public usage, Evolution snapshots/confirmations/conflicts/stale cancellation/session expiry, discovery, mobile, reduced motion and offline recovery. Evolution success states are intercepted display fixtures only.');

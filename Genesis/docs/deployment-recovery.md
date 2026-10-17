@@ -1,5 +1,13 @@
 # Deployment and recovery preparation
 
+## Current private update - 17 October 2026
+
+Build `0d25fbe5-add3-466c-895f-6e2325c71a94` succeeded for tested source `efd33c4f51cc7bf69a72a3360221f940a06087afe407bd6d25ec5aecb083f873`; both image digests and isolated smokes are verified. Web digest: `sha256:8529077b16924c006da11db7151c5d6c1b26d6d656bc340ab3ea4917b458f7cb`. Worker digest: `sha256:a8b5236e203cea149605b2c2892b8e3caec2952e66ad67ed87e40f0041f32fc6`. Both remain in Sydney's `genesis-demo-images` repository.
+
+Actual ready revisions are `genesis-demo-web-00003-v25` and `genesis-demo-worker-00004-5b9`. Readback verifies source/image identity, scale 0–1, original runtime service accounts, private IAM, unchanged Google UID allowlists and disabled cloud AI/task switches. Signed-out HTTP is 403; authenticated health is 200; task queue is PAUSED. Independent receipt: `.cache/deploy/private-staging-verification-efd33.json`. Prior 558ac images/revisions below remain the rollback baseline; do not rebuild or delete them as recovery.
+
+The installed native `gcloud run services proxy` exposes this private web service only at `http://127.0.0.1:18082`. Its [upstream implementation](https://github.com/GoogleCloudPlatform/cloud-run-proxy/blob/main/main.go) supplies IAM authentication in `X-Serverless-Authorization`, preserving application Firebase Authorization. Browser verification saw the deployed Google control, missing-Firebase-session 401 and unpublished-cases 503. The user then confirmed Operator login, corroborated by deployed session HTTP 200 logs on the current web revision. Local emulator app remains separate at port 8080 with its genuine investigation/review records. Cloud source publication, AI/task activation and public access are not authorized by the private update.
+
 ## Verified private staging - 17 October 2026
 
 This section supersedes the historical undeployed snapshots below. Replacement build `a8278142-5a7e-4a24-a90d-df32f5aa780b` succeeded for source `558ac42410d2eb7d9a84056cc0aa33c24e54e48e396a76107cc9e4f00c789148` (82 unit / 11 fresh-emulator integration passes). Web image digest is `sha256:9b637e8a9a43f77dbd7fca7133ed3f7b0594b87e6b0ad2d924709c0c7a28a36f`; worker is `sha256:584da09ad0fbf89a0bd8388235385261d30bb5c4e7208432181418607dab0080`, both in the Sydney `genesis-demo-images` repository.

@@ -2,6 +2,10 @@
 
 Required: an accessible GitHub repository. Status: local source draft only; no repository is published.
 
+Current verified source is `efd33c4f51cc7bf6` (82 unit / 11 fresh integration passes, build and full browser journeys). The clean export includes original Genesis only, with internal context, credentials, local records and copied artifacts excluded. Earlier archive descriptions below are historical.
+
+The supplied destination `adyyz/GoogleHack` is currently private. Its older history contains internal context even though a newer commit removes that folder. Do not make that repository public or rewrite its history as a cleanup shortcut. Final publication needs a reviewed clean-history destination; a new public Genesis repository would preserve the existing private history.
+
 File: `genesis-source-draft-04a798c518eaa744.zip`, copied from the verified 17 October source export. It contains 88 allowlisted source files plus a PREPARATION_ONLY manifest. SHA256: `04a798c518eaa744624ce661883d649833e6cccda48780f74a8df01b963a8a9c`. It predates this submission-folder organization and is not a final release revision. Existing source/evaluation provenance is inside its manifest.
 
 The newer local code-completion review is stored alongside that preserved historical copy as `genesis-source-draft-<first 16 SHA256 characters>.zip`, with a companion `.sha256` file. Its manifest identifies the actual verified source and 70 unit / 11 emulator integration passes. This review includes exact selected public submission/setup text and validates archived links. ZIP/PDF review copies themselves are excluded from source export. Final deployment, genuine evidence and publication are still pending.

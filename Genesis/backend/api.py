@@ -13,7 +13,7 @@ from .config import Settings
 from .dataset import DATASET_ID
 from .engine import candidate_options, simulate
 from .evolution import candidate_identity
-from .models import CandidateFreezeRequest, DailyControlRequest, EvolutionRequest, FeedbackRequest, RecommendationReviewRequest, TriageRequest
+from .models import CandidateFreezeRequest, DailyControlRequest, EvolutionRequest, FeedbackRequest, RecommendationReviewRequest, TriageRequest, PolicyChangeRequest, PatternReviewRequest
 from .jobs import run_evolution, run_local
 from .dispatch import dispatch_configured, dispatch_run
 from .usage import run_summary, summarize
@@ -24,7 +24,7 @@ ROLES = [
     {"id": 2, "name": "Risk assessment", "kind": "Code + Gemini", "output": "Five scores and evidence-linked explanation", "used_by": "Categorization and analyst"},
     {"id": 3, "name": "Typology categorization", "kind": "Gemini", "output": "Typology and suggested action", "used_by": "Investigation brief and prioritization"},
     {"id": 4, "name": "Investigation brief", "kind": "Gemini", "output": "Findings, counter-evidence, next steps", "used_by": "Human analyst review"},
-    {"id": 0, "name": "Post-triage prioritization", "kind": "Deterministic", "output": "Review priority with reasons", "used_by": "Analyst queue"},
+    {"id": 0, "name": "Machine pre-label and priority", "kind": "Deterministic", "output": "Versioned heuristic pre-label and review priority", "used_by": "Analyst queue"},
     {"id": 5, "name": "Evolution intelligence", "kind": "Statistics + Gemini", "output": "Versioned improvement proposals and evaluation", "used_by": "Monitoring lead; approval required"},
 ]
 
@@ -84,6 +84,16 @@ def create_app(settings: Settings | None = None):
         return {**summarize(steps), "failed_attempts": sum(s["state"] in {"FAILED", "UNKNOWN_OUTCOME"} for s in steps),
             "retry_count": sum(s.get("attempt_number", 1) > 1 for s in steps),
             "mean_duration_ms": sum(durations) / len(durations) if durations else None, "daily": repo.daily_control()}
+
+    @app.get("/api/operator/cases")
+    def operator_cases(_actor=Depends(operator), scope: str = Query("demo", pattern="^(demo|discovery)$")):
+        try: return repo.operator_queue(scope)
+        except Conflict as exc: raise HTTPException(409, str(exc))
+
+    @app.get("/api/operator/review-summary")
+    def review_summary(_actor=Depends(operator)):
+        from .rule_intelligence import operational_rows, statistics
+        return statistics(*operational_rows(repo))
 
     @app.get("/api/operator/runs")
     def runs(_actor=Depends(operator), limit: int = Query(50, ge=1, le=100), cursor: str | None = Query(None, pattern=r"^[A-Za-z0-9_-]{1,128}$")):
@@ -187,6 +197,44 @@ def create_app(settings: Settings | None = None):
         frozen = repo.get("candidate_freezes", stable_id(DATASET_ID, "heldout"))
         return {"freeze": frozen, "simulation": repo.get("simulations", frozen["id"]) if frozen else None}
 
+    @app.get("/api/operator/evolution/patterns")
+    def patterns(_actor=Depends(operator), limit: int = Query(50, ge=1, le=100), cursor: str | None = Query(None, pattern=r"^[A-Za-z0-9_-]{1,128}$")):
+        return repo.page("evolution_patterns", limit, cursor, [("dataset_id", DATASET_ID)])
+
+    @app.get("/api/operator/evolution/trends")
+    def review_trends(_actor=Depends(operator), limit: int = Query(50, ge=1, le=100), cursor: str | None = Query(None, pattern=r"^[A-Za-z0-9_-]{1,128}$")):
+        page = repo.page("pipeline_runs", limit, cursor, [("dataset_id", DATASET_ID), ("kind", "EVOLUTION")], order="created_at")
+        rows = []
+        for run in page["items"]:
+            snapshot = repo.get("analytical_snapshots", run["analytical_snapshot_id"])
+            body = snapshot["body"]
+            conclusive = body["sample_sizes"]["conclusive_reviews"]
+            false_positive = sum(row["false_positive_reviews"] for row in body["rules"].values())
+            rows.append({"run_id": run["id"], "created_at": run["created_at"], "state": run["state"],
+                "reviewed_alerts": body["sample_sizes"]["reviewed_alerts"], "conclusive_reviews": conclusive,
+                "rules": body["rules"], "false_positive_reviews": false_positive, "reviewed_alert_noise_proportion": false_positive / conclusive if conclusive else None})
+        return {**page, "items": rows}
+
+    @app.put("/api/operator/evolution/patterns/{pattern_id}")
+    def pattern_review(pattern_id: str, request: PatternReviewRequest, actor=Depends(operator)):
+        try: return repo.update_pattern(pattern_id, request, actor)
+        except LookupError as exc: raise HTTPException(404, str(exc))
+
+    @app.get("/api/operator/evolution/recommendations")
+    def recommendations(_actor=Depends(operator), limit: int = Query(50, ge=1, le=100), cursor: str | None = Query(None, pattern=r"^[A-Za-z0-9_-]{1,128}$")):
+        page = repo.page("recommendations", limit, cursor, [("dataset_id", DATASET_ID)])
+        return {**page, "items": [repo.recommendation_view(row) for row in page["items"]]}
+
+    @app.post("/api/operator/evolution/recommendations/{recommendation_id}/apply")
+    def apply_recommendation(recommendation_id: str, request: PolicyChangeRequest, actor=Depends(operator)):
+        try: return repo.apply_recommendation(recommendation_id, request, actor)
+        except LookupError as exc: raise HTTPException(404, str(exc))
+
+    @app.post("/api/operator/evolution/recommendations/{recommendation_id}/rollback")
+    def rollback_recommendation(recommendation_id: str, request: PolicyChangeRequest, actor=Depends(operator)):
+        try: return repo.apply_recommendation(recommendation_id, request, actor, rollback=True)
+        except LookupError as exc: raise HTTPException(404, str(exc))
+
     @app.get("/api/operator/evolution/candidates")
     def freeze_options(_actor=Depends(operator)):
         manifest = repo.get("datasets", DATASET_ID)
@@ -217,12 +265,13 @@ def create_app(settings: Settings | None = None):
         try:
             if settings.mode != "local" and not dispatch_configured(settings):
                 raise HTTPException(503, "Cloud dispatch is disabled or unverified; no work enqueued")
-            parent_id, created = repo.enqueue_triage(request.alert_ids, actor)
+            parent_id, created = repo.enqueue_triage(request.alert_ids, actor, request.expected_policy_version, request.expected_auto_label_policy_version)
             if settings.mode == "cloud": dispatch_run(repo, parent_id)
             elif created and not settings.local_gemini_enabled: run_local(repo, parent_id)
             return {**repo.run_detail(parent_id), "initiated_by_me": repo.get("pipeline_runs", parent_id).get("actor_uid") == actor}
         except LookupError as exc: raise HTTPException(404, str(exc))
         except ValueError as exc: raise HTTPException(422, str(exc))
+        except Conflict as exc: raise HTTPException(409, str(exc))
 
     @app.get("/api/operator/alerts/{alert_id}")
     def private_alert(alert_id: str, _actor=Depends(operator)):
@@ -232,9 +281,13 @@ def create_app(settings: Settings | None = None):
 
     @app.get("/api/operator/alerts/{alert_id}/feedback")
     def feedback_history(alert_id: str, _actor=Depends(operator), limit: int = Query(50, ge=1, le=100), cursor: str | None = Query(None, pattern=r"^[A-Za-z0-9_-]{1,128}$")):
-        if not repo.get("alerts", alert_id): raise HTTPException(404, "Alert not found")
+        alert = repo.get("alerts", alert_id)
+        if not alert: raise HTTPException(404, "Alert not found")
+        repo.operational_case(alert["case_id"])
         return repo.page("feedback_events", limit, cursor, [("alert_id", alert_id), ("dataset_id", DATASET_ID)], order="revision")
 
+    from .intelligence_api import register
+    register(app, repo, operator)
     dist = Path(__file__).resolve().parents[1] / "dist"
     if dist.exists(): app.mount("/", StaticFiles(directory=dist, html=True), name="frontend")
     return app

@@ -1,5 +1,7 @@
 # Submission checklist
 
+> Completion audit ? 18 October 2026: No final submission is complete. Earlier private Cloud Run URLs exist, but the current source is not deployed and no final signed-out public prototype is verified. Local genuine investigation/review/A5/freeze evidence exists; cloud integration, the prescribed PDF, recorded video, clean public repository and final links remain open.
+
 Source: the submission reminder screenshot supplied by the user on 17 October 2026. It requires all five items below; one missing item makes the submission incomplete. These folders hold local preparation only. Nothing here has been published or submitted.
 
 ## Five required deliverables

@@ -24,6 +24,8 @@ module.exports = async function checkEvolution(browser, baseUrl = 'http://127.0.
     await page.route('**/api/operator/session', route => route.fulfill({ json: { uid: 'operator-demo', is_admin: false, live_ai_eligible: true, mode: 'local' } }));
     await page.route('**/api/operator/evolution/**', async route => {
       const request = route.request(), url = new URL(request.url()), path = url.pathname;
+      if (request.method() === 'GET' && (path.includes('/auto-label/') || path.includes('/rules/') || path.endsWith('/rule-matrix') || path.endsWith('/public-brief'))) return route.continue();
+      if (['/patterns', '/recommendations', '/trends'].some(suffix => path.endsWith(suffix))) return route.fulfill({ json: { items: [], next_cursor: null } });
       if (path.endsWith('/snapshots')) return route.fulfill({ json: request.method() === 'POST' ? snapshot : { items: [snapshot], next_cursor: null } });
       if (path.endsWith('/candidates')) return route.fulfill({ json: { options: [{ candidate, candidate_hash: 'c'.repeat(64) }] } });
       if (path.endsWith('/freeze')) return route.fulfill({ json: stored });
@@ -145,7 +147,7 @@ module.exports = async function checkEvolution(browser, baseUrl = 'http://127.0.
     await page.getByRole('button', { name: 'Investigations', exact: true }).click();
     await page.getByLabel('Search cases', { exact: true }).fill(current.name);
     await page.locator('.case-item').click();
-    await page.getByRole('heading', { name: 'Private investigation brief', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'AI analysis and suggested actions', exact: true }).waitFor();
     await expect(page.getByRole('button', { name: 'Save feedback', exact: true })).toBeEnabled();
     await page.getByText(/Source-ID checks do not establish semantic support/).waitFor();
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Private citation IDs must wrap on mobile');
@@ -153,7 +155,7 @@ module.exports = async function checkEvolution(browser, baseUrl = 'http://127.0.
     await page.route(alertPath, route => route.fulfill({ status: 401, json: { detail: 'Fixture expired session' } }));
     await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
     await page.getByText('Your operator session expired. Sign in again to continue.', { exact: true }).waitFor();
-    await expect(page.getByRole('heading', { name: 'Private investigation brief', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'AI analysis and suggested actions', exact: true })).toHaveCount(0);
     assert.deepEqual(await page.evaluate(() => [Object.keys(localStorage), Object.keys(sessionStorage)]), [[], []]);
   } finally { await page.close(); }
 };

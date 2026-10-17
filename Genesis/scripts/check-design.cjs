@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const design = fs.readFileSync('DESIGN.md', 'utf8');
+const design = fs.readFileSync('DESIGN.md', 'utf8').replaceAll('\r\n', '\n');
 const css = fs.readFileSync('frontend/style.css', 'utf8');
 const colors = design.match(/^colors:\n([\s\S]*?)^typography:/m)[1];
 for (const [, name, value] of colors.matchAll(/^  ([\w-]+): "(#[0-9a-f]+)"/gm)) {

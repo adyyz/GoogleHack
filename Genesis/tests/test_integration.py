@@ -16,6 +16,120 @@ FIRESTORE_URL = _loopback_endpoint("FIRESTORE_EMULATOR_HOST")
 pytestmark = pytest.mark.skipif(not AUTH_URL or not FIRESTORE_URL, reason="Run npm run test:integration with loopback emulators")
 
 
+def test_private_discovery_scope_preserves_publication_and_denies_reserved_cases():
+    from backend.config import Settings
+    from backend.repository import Repository, Conflict
+    repo = Repository(Settings.load())
+    # This test runs after seeding when invoked alone too.
+    from backend.seed import seed
+    seed()
+    before = repo.publication()
+    discovery = repo.operator_queue('discovery')
+    assert len(discovery['cases']) == 40 and all(row['split'] == 'CALIBRATION_DISCOVERY' for row in discovery['cases'])
+    assert repo.publication() == before and len(repo.operator_queue()['cases']) == 12
+    reserved = {row['id'] for row in repo.list('cases') if row['split'] in {'CALIBRATION_SELECTION', 'HOLDOUT'}}
+    alert = next(row for row in repo.list('alerts') if row['case_id'] in reserved)
+    count = len(repo.list('pipeline_runs'))
+    with pytest.raises(Conflict, match='Reserved'): repo.enqueue_triage([alert['id']], 'test-only')
+    with pytest.raises(Conflict, match='Reserved'): repo.alert_detail(alert['id'])
+    assert len(repo.list('pipeline_runs')) == count
+
+
+def test_a0_policy_transaction_uses_isolated_eligibility_double_and_preserves_versions(monkeypatch):
+    """No model output or human verdict is created. Only transaction eligibility is doubled."""
+    from copy import deepcopy
+    from datetime import timedelta
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from backend import calibration
+    from backend.config import Settings
+    from backend.dataset import DATASET_ID, content_hash
+    from backend.models import PolicyChangeRequest, RecommendationReviewRequest
+    from backend.repository import Repository, now, Conflict
+    repo = Repository(Settings.load()); client = repo.db
+    prefix = 'a0_transactions_TEST_ONLY_' + uuid4().hex + '_'
+    repo.db = SimpleNamespace(collection=lambda name: client.collection(prefix + name), transaction=client.transaction)
+    frozen = now()
+    training = [{'identity_id': str(index), 'score': .5 if index < 12 else .2,
+        'verdict': 'FALSE_POSITIVE' if index < 12 else 'TRUE_POSITIVE'} for index in range(15)]
+    baseline = {'tp': .25, 'fp': .65, 'cohort': None}; thresholds = {'tp': .25, 'fp': .4, 'cohort': 'TEST_ONLY'}
+    forward = [{**training[index], 'identity_id': 'new-' + str(index), 'cohort': 'TEST_ONLY', 'submitted_at': frozen + timedelta(seconds=1)} for index in [0, 1, 2, 13, 14]]
+    validation = {'rows': forward, 'content_hash': content_hash(forward), 'before': calibration.measured(forward, baseline, baseline),
+        'after': calibration.measured(forward, thresholds, baseline), 'passed': True, 'provenance': 'PROSPECTIVE_HUMAN_REVIEWS'}
+    row = {'id': uuid4().hex[:24], 'dataset_id': DATASET_ID, 'rule_id': 'HIGH_VALUE', 'state': 'PROPOSED', 'revision': 0,
+        'method': calibration.METHOD, 'cohort': 'TEST_ONLY', 'training': training, 'training_hash': content_hash(training),
+        'baseline': baseline, 'thresholds': thresholds, 'validation': None, 'frozen_at': frozen}
+    row['candidate_hash'] = content_hash({key: row[key] for key in ('rule_id', 'thresholds', 'training_hash', 'cohort', 'method', 'baseline', 'frozen_at')})
+    repo.create('auto_label_candidates', row['id'], row)
+    with pytest.raises(Conflict, match='Prospective'):
+        calibration.decision(repo, row['id'], RecommendationReviewRequest(expected_revision=0, state='APPROVED', notes='TEST_ONLY'), 'test', 'review')
+    repo.db.collection('auto_label_candidates').document(row['id']).update({'validation': validation})
+    approved = calibration.decision(repo, row['id'], RecommendationReviewRequest(expected_revision=0, state='APPROVED', notes='TEST_ONLY'), 'test', 'review')
+    assert approved['state'] == 'APPROVED' and calibration.active_label_policy(repo)['revision'] == 0
+    # A mechanics double cannot satisfy actual genuine feedback checks.
+    with pytest.raises((KeyError, Conflict)):
+        calibration.decision(repo, row['id'], PolicyChangeRequest(expected_revision=1, expected_policy_revision=0, notes='TEST_ONLY'), 'test', 'apply')
+    monkeypatch.setattr(calibration, 'verify_references', lambda *_args: None)
+    applied = calibration.decision(repo, row['id'], PolicyChangeRequest(expected_revision=1, expected_policy_revision=0, notes='TEST_ONLY'), 'test', 'apply')
+    policy = calibration.active_label_policy(repo)
+    assert policy['rules']['HIGH_VALUE'] == thresholds and policy['revision'] == 1
+    version = deepcopy(repo.get('config_versions', applied['applied_policy_id']))
+    # Namespaced transaction mechanics only: sealed evidence is supplied in memory,
+    # never written to the model ledger or counted as a human review.
+    from backend.models import ReassessmentRequest
+    source = {'id': 'case', 'dataset_id': DATASET_ID, 'split': 'DEMO'}
+    repo.create('cases', 'case', source)
+    for index in [1, 2]:
+        alert_id = str(index) * 24
+        repo.create('alerts', alert_id, {'id': alert_id, 'dataset_id': DATASET_ID, 'case_id': 'case', 'rule_id': 'HIGH_VALUE',
+            'status': 'COMPLETE', 'feedback_revision': index - 1, 'current_run_id': 'run', 'latest_run_id': 'run'})
+    repo.create('pipeline_runs', 'run', {'id': 'run', 'dataset_id': DATASET_ID, 'config_bundle_id': 'TEST_ONLY'})
+    monkeypatch.setattr(repo, '_sealed_chain', lambda *_: [{'leg_id': 'A0', 'output': {'predicted_verdict': 'AUTO_UNCERTAIN',
+        'heuristic_score': .5, 'requires_context_or_protected_review': False, 'score_is_probability': False}}])
+    monkeypatch.setattr(calibration, 'cohort', lambda *_: 'TEST_ONLY')
+    reassessment = ReassessmentRequest(expected_revision=2, expected_policy_version=policy['policy_version_id'], notes='TEST_ONLY')
+    first = calibration.reassess(repo, row['id'], reassessment, 'test')
+    assert [item['state'] for item in first['items']] == ['SUCCEEDED', 'SKIPPED']
+    assessment = repo.get('auto_label_assessments', first['items'][0]['assessment_id'])
+    assert assessment['body']['predicted_verdict'] == 'AUTO_FP'
+    assert calibration.reassess(repo, row['id'], reassessment, 'test') == first
+    assert repo.get('cases', 'case') == {**source, 'schema_version': 1, 'created_at': repo.get('cases', 'case')['created_at']}
+    with pytest.raises(Conflict, match='changed'):
+        calibration.decision(repo, row['id'], PolicyChangeRequest(expected_revision=1, expected_policy_revision=0, notes='TEST_ONLY'), 'test', 'apply')
+    rolled = calibration.decision(repo, row['id'], PolicyChangeRequest(expected_revision=2, expected_policy_revision=1, notes='TEST_ONLY'), 'test', 'rollback')
+    assert rolled['state'] == 'ROLLED_BACK' and calibration.active_label_policy(repo)['policy_version_id'] == calibration.BASELINE
+    assert repo.get('config_versions', applied['applied_policy_id']) == version
+    restored = calibration.reassess(repo, row['id'], ReassessmentRequest(expected_revision=3, expected_policy_version=calibration.BASELINE, notes='TEST_ONLY'), 'test')
+    assert restored['items'][0]['state'] == 'SUCCEEDED'
+    restored_record = repo.get('auto_label_assessments', restored['items'][0]['assessment_id'])
+    assert restored_record['body']['predicted_verdict'] == 'AUTO_UNCERTAIN' and restored_record['body']['restoration']
+    assert repo.get('auto_label_assessments', assessment['id']) == assessment
+    assert not repo.list('feedback_events') and not repo.list('step_runs')
+
+
+def test_public_brief_transaction_revision_withdrawal_and_immutable_snapshot(monkeypatch):
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from backend import intelligence_api as api
+    from backend.config import Settings
+    from backend.repository import Repository, Conflict
+    repo = Repository(Settings.load()); client = repo.db
+    prefix = 'publication_TEST_ONLY_' + uuid4().hex + '_'
+    repo.db = SimpleNamespace(collection=lambda name: client.collection(prefix + name), transaction=client.transaction)
+    # Aggregation/validation is checked separately; this fixture tests pointer transactions.
+    body = {'executive_summary': 'TEST_ONLY aggregate fixture', 'counts': {'reviewed_alerts': 0}}
+    monkeypatch.setattr(api, 'publication_body', lambda *_: body)
+    request = api.PublicationRequest(expected_revision=0, report_id='a' * 24, executive_summary='TEST_ONLY')
+    result = api.publish(repo, request, 'test')
+    published = api.public_brief(repo)
+    assert published['publication']['body'] == body
+    with pytest.raises(Conflict): api.publish(repo, request, 'test')
+    api.withdraw(repo, api.WithdrawalRequest(expected_revision=1, notes='TEST_ONLY'), 'test')
+    assert api.public_brief(repo) == {'revision': 2, 'publication': None}
+    assert repo.get('evolution_publications', result['publication_id']) == published['publication']
+    assert len(repo.list('audit_events')) == 2
+
+
 def _reservation_input(repo, bundle_id, leg, contents):
     """Valid frozen request for ledger fault tests; never a provider response."""
     bundle = repo.get("config_versions", bundle_id)
@@ -211,7 +325,7 @@ def test_seed_publication_auth_and_persistence():
         assert candidates.headers["cache-control"] == "no-store" and "Authorization" in candidates.headers["vary"]
         assert client.get("/api/operator/evolution/candidates").status_code == 401
         review_url = "/api/operator/evolution/recommendations/missing/review"
-        review = {"expected_revision": 0, "state": "REVIEWED", "notes": "No proposal exists"}
+        review = {"expected_revision": 0, "state": "APPROVED", "notes": "No proposal exists"}
         assert client.put(review_url, json=review).status_code == 401
         assert client.put(review_url, headers=headers, json=review).status_code == 404
 
@@ -833,6 +947,122 @@ def test_source_publisher_resumes_create_only_and_preserves_publication_on_failu
         _prepare_source(repo, data, "publisher-test")
     assert repo.publication()["id"] == published
     assert not repo.list("step_runs") and not repo.list("feedback_events")
+
+
+def test_operator_policy_queue_and_transactional_application_rollback(monkeypatch):
+    """Isolated policy mechanics; the eligible-evidence double is NOT a model result."""
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from backend.config import Settings
+    from backend.dataset import DATASET_ID
+    from backend.models import PolicyChangeRequest, FeedbackRequest
+    from backend.repository import Conflict, Repository
+    repo = Repository(Settings.load())
+    publication = repo.publication()
+    source_cases = repo.list("cases")
+    client = repo.db
+    prefix = "policy_mechanics_test_" + uuid4().hex + "_"
+    repo.db = SimpleNamespace(collection=lambda name: client.collection(prefix + name), transaction=client.transaction)
+    repo.create("publications", "test-only", publication)
+    for source_case in source_cases: repo.create("cases", source_case["id"], source_case)
+    repo.db.collection("publications").document("active").set({"publication_id": "test-only"})
+    for case in publication["public_cases"]:
+        for alert in case["alerts"]: repo.create("alerts", alert["id"], alert)
+    case = next(row for row in publication["public_cases"] if len(row["alerts"]) >= 2)
+    frozen_id, remaining = case["alerts"][0]["id"], [row["id"] for row in case["alerts"][1:]]
+    repo.db.collection("alerts").document(frozen_id).update({"feedback_revision": 1, "status": "COMPLETE"})
+    queue = repo.operator_queue()
+    assert queue["policy_version_id"] == "detector-v1"
+    assert next(row for row in queue["cases"] if row["id"] == case["id"])["progress"]["frozen"] == 1
+    with pytest.raises(Conflict, match="frozen"):
+        repo.save_feedback(frozen_id, FeedbackRequest(verdict="INCONCLUSIVE", notes="Refusal fixture", expected_revision=1), "test-only")
+    with pytest.raises(Conflict, match="actionable"):
+        repo.enqueue_triage([frozen_id, *remaining], "test-only", "detector-v1")
+    parent, created = repo.enqueue_triage(remaining, "test-only", "detector-v1")
+    assert created and len(repo.get("pipeline_runs", parent)["child_run_ids"]) == len(remaining)
+    assert repo.get("alerts", frozen_id)["feedback_revision"] == 1
+    ident = uuid4().hex[:24]
+    repo.create("recommendations", ident, {"dataset_id": DATASET_ID, "state": "APPROVED", "revision": 0})
+    request = PolicyChangeRequest(expected_revision=0, expected_policy_revision=0, notes="Test-only policy transaction")
+    with pytest.raises(Conflict, match="genuine"):
+        repo.apply_recommendation(ident, request, "test-only")
+    assert repo.active_policy()["revision"] == 0
+    # Verify atomic policy mechanics independently of genuine AI/evaluation eligibility.
+    monkeypatch.setattr(repo, "application_evidence", lambda *_args: {"candidate": {"id": "hv-20000", "kind": "RULE_THRESHOLD", "threshold_aud_minor": 2000000},
+        "simulation_id": "test-only-not-genuine", "candidate_hash": "test-only-not-genuine"})
+    before_publication = repo.publication()
+    applied = repo.apply_recommendation(ident, request, "test-only")
+    assert applied["state"] == "APPLIED" and repo.active_policy()["revision"] == 1
+    assert repo.publication() == before_publication
+    assert repo.get("alerts", frozen_id)["feedback_revision"] == 1
+    bundle = repo.get("config_versions", repo.ensure_baseline())
+    assert bundle["body"]["detector_version"] == applied["applied_policy_id"]
+    with pytest.raises(Conflict, match="changed"):
+        repo.apply_recommendation(ident, request, "test-only")
+    with pytest.raises(Conflict, match="Policy changed"):
+        repo.enqueue_triage(remaining, "test-only", "detector-v1")
+    rolled = repo.apply_recommendation(ident, PolicyChangeRequest(expected_revision=1, expected_policy_revision=1,
+        notes="Test-only rollback"), "test-only", rollback=True)
+    assert rolled["state"] == "ROLLED_BACK" and repo.active_policy()["policy_version_id"] == "detector-v1"
+    assert repo.active_policy()["revision"] == 2 and repo.get("config_versions", applied["applied_policy_id"])
+    assert not repo.list("step_runs") and not repo.list("feedback_events")
+
+    # Isolate the save transaction mechanics from AI provenance validation.
+    # These TEST_ONLY records are not genuine analyst/model evidence.
+    from concurrent.futures import ThreadPoolExecutor
+    completed = "test-only-completed-run"
+    repo.create("pipeline_runs", completed, {"id": completed, "dataset_id": DATASET_ID, "state": "COMPLETE",
+        "alert_id": remaining[0], "case_id": case["id"], "config_bundle_id": repo.ensure_baseline()})
+    repo.db.collection("alerts").document(remaining[0]).update({"status": "COMPLETE", "current_run_id": completed})
+    monkeypatch.setattr(repo, "_sealed_chain", lambda *_args: [])
+    feedback = FeedbackRequest(verdict="INCONCLUSIVE", notes="TEST_ONLY transaction fixture", expected_revision=0)
+    def save(_index):
+        try: return repo.save_feedback(remaining[0], feedback, "TEST_ONLY")
+        except Conflict: return None
+    with ThreadPoolExecutor(max_workers=2) as pool: saved = list(pool.map(save, range(2)))
+    assert sum(row is not None for row in saved) == 1
+    assert len(repo.list("feedback_events")) == 1 and not repo.list("step_runs")
+    with pytest.raises(Conflict, match="frozen"):
+        repo.save_feedback(remaining[0], feedback.model_copy(update={"expected_revision": 1}), "TEST_ONLY")
+
+
+def test_local_reservations_follow_admin_limit_above_twelve(monkeypatch):
+    """Real isolated ledger; no provider calls or successful model output."""
+    from dataclasses import replace
+    from datetime import timedelta
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from backend.config import Settings
+    from backend.dataset import DATASET_ID, content_hash, stable_id
+    from backend.models import DailyControlRequest, PipelineRun, StepRun
+    from backend.repository import Conflict, Repository, now
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-not-a-credential")
+    repo = Repository(replace(Settings.load(), local_gemini_enabled=True, local_gemini_free_verified=True,
+        local_gemini_verified_until=now() + timedelta(minutes=5)))
+    client = repo.db
+    prefix = "local_limit_test_" + uuid4().hex + "_"
+    repo.db = SimpleNamespace(collection=lambda name: client.collection(prefix + name), transaction=client.transaction)
+    bundle_id = repo.ensure_baseline()
+    assert repo.get("config_versions", bundle_id)["body"]["max_daily_attempts"] == 120
+    daily = repo.daily_control()
+    repo.update_daily_control(DailyControlRequest(expected_revision=daily["revision"], live_enabled=True, limit=13), "test-only")
+    for index in range(14):
+        run_id = uuid4().hex
+        repo.create("pipeline_runs", run_id, PipelineRun(id=run_id, dataset_id=DATASET_ID,
+            kind="TRIAGE_ALERT", config_bundle_id=bundle_id, actor_uid="test-only", state="RUNNING").model_dump())
+        request = _reservation_input(repo, bundle_id, "A2", "test-only")
+        step = StepRun(id=stable_id(run_id, "A2", 1), dataset_id=DATASET_ID, run_id=run_id,
+            leg_id="A2", config_bundle_id=bundle_id, state="STARTED", model_id=repo.settings.active_model_id,
+            started_at=now(), input_hash=content_hash(request), input_snapshot=request,
+            usage_status="UNKNOWN", cost_status="UNKNOWN")
+        if index < 13:
+            assert repo.reserve_model_attempt(step)
+        else:
+            with pytest.raises(Conflict, match="CAP_REACHED"):
+                repo.reserve_model_attempt(step)
+            assert repo.get("step_runs", step.id) is None
+    assert repo.daily_control()["attempts_reserved"] == 13
 
 
 def test_frozen_rate_card_reservation_and_failed_output_accounting(monkeypatch):

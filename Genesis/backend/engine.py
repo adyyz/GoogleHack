@@ -98,25 +98,42 @@ def prioritize(evidence: dict, risk: dict, action: str | None, valid: bool = Tru
     return {"priority": priority, "reason": reason, "is_verdict": False}
 
 
+AUTO_LABEL_VERSION = "auto-label-v1"
+
+
+def auto_label(evidence, classification, thresholds=None, policy_version=AUTO_LABEL_VERSION):
+    signals = []
+    if classification["primary_typology"] == "LOW_RISK": signals.append(("LOW_RISK", .5))
+    if classification["suggested_action"] == "CLOSE": signals.append(("CLOSE", .3))
+    if classification["uncertainty"] == "HIGH": signals.append(("HIGH_UNCERTAINTY", .2))
+    score = round(sum(value for _, value in signals), 2)
+    forced = bool(evidence["missing_context"] or evidence["protected_signals"])
+    thresholds = thresholds or {"tp": .25, "fp": .65}
+    if not 0 <= thresholds["tp"] < thresholds["fp"] <= 1: raise ValueError("Invalid A0 thresholds")
+    label = "AUTO_UNCERTAIN" if forced else "AUTO_FP" if score >= thresholds["fp"] else "AUTO_TP" if score <= thresholds["tp"] else "AUTO_UNCERTAIN"
+    return {"predicted_verdict": label, "heuristic_score": score, "label_policy_version": policy_version,
+        "label_signals": [name for name, _ in signals], "requires_context_or_protected_review": forced,
+        "score_is_probability": False}
+
+
+def retains_high_value(evidence, candidate):
+    if not candidate: return True
+    if candidate not in candidate_options(): raise ValueError("Unsupported detector candidate")
+    trigger, facts = evidence["trigger"], evidence["facts"]
+    if candidate["kind"] == "RULE_THRESHOLD": return trigger["amount_aud_minor"] > candidate["threshold_aud_minor"]
+    from datetime import datetime
+    return not (not evidence["missing_context"] and not evidence["protected_signals"]
+        and datetime.fromisoformat(trigger["occurred_at"]) - datetime.fromisoformat(evidence["account"]["opened_at"]) >= timedelta(days=365)
+        and facts["comparable_count"] >= 30
+        and abs(trigger["amount_aud_minor"] - facts["historical_mean_aud_minor"]) <= 2 * facts["historical_stddev_aud_minor"])
+
+
 def detect(data: Dataset, case: Case, candidate: dict | None = None) -> list[dict]:
     if candidate is not None and candidate not in candidate_options(): raise ValueError("Unsupported detector candidate")
     evidence = enrich(data, case)
     matches = [signal for signal in evidence["signals"] if signal in RULES]
-    if candidate and "HIGH_VALUE" in matches:
-        trigger = evidence["trigger"]
-        if candidate["kind"] == "RULE_THRESHOLD":
-            if candidate["threshold_aud_minor"] not in {1_500_000, 2_000_000}: raise ValueError("Unsupported high-value threshold")
-            if trigger["amount_aud_minor"] <= candidate["threshold_aud_minor"]: matches.remove("HIGH_VALUE")
-        elif candidate["kind"] == "EXPECTED_ACTIVITY_EXEMPTION":
-            account = data.accounts[trigger["account_id"]]
-            tx = data.transactions[trigger["id"]]
-            facts = evidence["facts"]
-            if (not evidence["missing_context"] and not evidence["protected_signals"]
-                and tx.occurred_at - account.opened_at >= timedelta(days=365)
-                and facts["comparable_count"] >= 30
-                and abs(tx.amount_aud_minor - facts["historical_mean_aud_minor"]) <= 2 * facts["historical_stddev_aud_minor"]):
-                matches.remove("HIGH_VALUE")
-        else: raise ValueError("Unsupported detector candidate")
+    if candidate and "HIGH_VALUE" in matches and not retains_high_value(evidence, candidate):
+        matches.remove("HIGH_VALUE")
     return [{"id": stable_id(data.id, case.trigger_transaction_id, rule), "dataset_id": data.id,
              "case_id": case.id, "trigger_transaction_id": case.trigger_transaction_id,
              "rule_id": rule, "rule_name": RULES[rule], "status": "PENDING", "feedback_revision": 0,

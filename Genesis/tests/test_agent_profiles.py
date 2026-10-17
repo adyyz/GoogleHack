@@ -196,14 +196,15 @@ def test_complete_generation_profiles_are_immutable_and_workers_ignore_later_set
         records[ident] = {"id": ident, **deepcopy(value)}
     repo.create = create
     repo.get = lambda _collection, ident: deepcopy(records.get(ident))
-    original_id = repo.ensure_baseline()
+    repo.active_policy = lambda: {"policy_version_id": "detector-v1"}
+    original_id = repo.ensure_baseline(auto_label_policy_id="auto-label-v1")
     original = deepcopy(records[original_id])
     pinned = original["body"]["generation_profiles"]["A4"]
     assert pinned["model_id"] == settings.active_model_id and pinned["thinking_level"] == "MEDIUM"
     assert pinned["temperature"] == 0.2 and pinned["max_output_tokens"] == 2048
     body["profiles"]["deep_investigation"]["temperature"] = 0.9
     repo.settings = replace(settings, agent_profiles_json=json.dumps(body))
-    assert repo.ensure_baseline() != original_id
+    assert repo.ensure_baseline(auto_label_policy_id="auto-label-v1") != original_id
     assert records[original_id] == original
     assert _leg_profile(repo, original_id, "A4").temperature == 0.2
 

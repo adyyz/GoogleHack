@@ -1,5 +1,15 @@
 # AML Insight UI contract
 
+## Identity review and operator-approved detector policies — 18 October 2026
+
+Identity type and identity filters are native selects owned by the existing form-field styling. Filters and search operate on the same case set; selection stays within visible results. Changing filters, cases, alerts, recommendation selection or screens uses App's unsaved-note guard. The queue shows linked source identity/account, the full available 90-day transaction trail and counts awaiting triage/review or frozen. Customer type is a source attribute, not an AI identity-verification claim.
+
+Operator queue reads are private and policy-versioned. Public frozen publications retain baseline detector evidence. Refresh is explicit. Selected-case triage includes all applicable unfrozen alerts, preserves frozen alerts and pins the expected detector version. No actionable alerts means a disabled triage action. Saved analyst feedback is final; the form and API refuse later changes. Historical events remain readable.
+
+Agent 0 owns the deterministic machine pre-label, heuristic score and explanatory signals, separately from priority and the analyst verdict. Legacy runs show Not recorded. The score is never presented as a calibrated probability. Evolution's ReviewOverview counts stored analyst outcomes and machine agreement with explicit denominators; it never infers population accuracy/FPR from reviewed alerts.
+
+RecommendationQueue owns bounded recommendation/pattern histories and explicit operator approval, rejection, apply and rollback. It reuses native selects, the request helper, Dialog and the parent dirty-state owner. Each item separates AI rationale, sample support, measured synthetic what-if, expected/unknown effects and observed post-apply outcomes. Insufficient, unchanged or unsafe findings cannot be approved/applied. A0/Python risk weights, prompts and model selection are not application targets. Application changes only future detector-policy versions; historical runs, frozen reviews and held-out records are immutable. Confirmation and expected revisions are mandatory; failed/unknown writes preserve notes and require authoritative refresh. No automatic retries or activation occur.
+
 ## Business sources
 
 | Source | UI consequence |
@@ -66,7 +76,7 @@ The newer triage contract replaces the historical 503 behavior above: local POST
 
 Review is scoped to one selected alert. Verdict, notes and optional action override use labeled native controls, app-owned validation and an expected revision. Notes remain visible after server errors. A 409 instructs refresh rather than automatic overwrite. Case/alert/screen/sign-out navigation guards unsaved review with the shared dialog; actual page unload uses a narrow beforeunload handler. Successful save clears the draft and refreshes history. No draft or operator token is persisted in browser storage or URLs.
 
-The shared public/operator usage renderer draws only reconciled, mutually exclusive categories, with provider total tokens in the center. Unknown provider outcomes say Unknown; deterministic and not-sent steps say Not applicable. Unreconciled categories use a list with an Unavailable chart; no fabricated slice. The operator completion toast is non-modal, deduplicated by parent ID, dismissible and opens the shared modal dialog only on request. Critical run failures remain in the private alert status after toast dismissal.
+The shared public/operator usage renderer draws only reconciled, mutually exclusive categories, with provider total tokens in the center. Unknown provider outcomes say Unknown; deterministic and not-sent steps say Not applicable. Unreconciled categories use a list with an Unavailable chart; no fabricated slice. The operator completion toast is non-modal, deduplicated by parent ID, dismissible, automatically dismissed after 8 seconds and opens the shared modal dialog only on request. Each new parent notification gets its own timer; dismissal or unmount clears it. Critical run failures remain in the private alert status after toast dismissal.
 
 Admin is visible only while signed in; operators can read summaries, recent runs and audit history. Controls render only after the server session reports is_admin. They are today's UTC live_enabled and a 1–120 attempt limit, never below reservations. All changes use the shared confirmation dialog and expected revision; a new day starts disabled. Cloud/credit gates remain authoritative server-side. There is no model selector, delete/retry control or activation endpoint.
 
@@ -83,3 +93,30 @@ Candidate freezing requires a genuine stored A5 result, an explicit allowlisted 
 Freeze and recommendation notes are guarded when changing selection, switching screen, signing out or unloading. Refresh preserves drafts and the selected resource while reading authoritative state, including after a revision conflict. Errors retain notes and direct users to refresh authoritative state. Session expiry clears private data; no notes or tokens persist to URLs or browser storage. Requests and responses after unmount are cancelled/ignored. Routine status acknowledgements are inline; App remains the only terminal investigation-toast owner.
 
 `OperatorReview.tsx` renders the private completed investigation from validated A2/A3/A4 records, including citation IDs, limitations and code-owned priority. The public header is labeled Published evidence; it never claims to be live operator status. Source-ID validity never claims manual semantic support or a human verdict.
+
+
+Investigation completion indicators derive from authenticated alert states, including updates returned by explicit status refresh and successful feedback saves; they are not fixed visual checks. All case alerts must be complete or frozen for case-level AI completion, and all must have frozen reviews for review completion. No browser polling is introduced. An unfrozen alert remains reanalyzable; saved verdicts remain immutable and are summarized by the compact saved-review card. Transaction citations navigate to highlighted source rows; non-transaction IDs remain optional reference disclosures. Long transaction and feedback histories scroll within their own labeled, keyboard-focusable surfaces.
+
+Optional usage categories (cached prompt, reasoning, tool prompt) render only when reported above zero, in both the shared usage summary and attempt details. Core prompt/output/total categories retain unknown and not-applicable states. Chart reconciliation still requires complete non-overlapping provider metadata. Local build candidates created before these UI edits are historical and require re-verification/repackaging before deployment.
+
+
+Public/operator consistency: source identity, profile, account, queue hints, triggering movement, evidence snapshot, transaction trail and deterministic risk display are identical for a selected published case. Source/risk checks live in the shared evidence header. Authenticated AI completion and frozen-review checks live in the separate investigation workspace; public visitors see Operator-only status there, not a claim that work has not occurred. Private narrative output and human verdicts retain their existing access controls. Investigation/review/usage panels span both content columns below the shared evidence row. Verified for genuine Alex Example Demo 006 before/after sign-in and at 1440, 1024, 768, 390 and 320px.
+
+
+## Rule intelligence and threshold learning - 18 October 2026
+
+Evolution leads with the selected report and nine-row Outcomes/Configuration matrix. Native category/status filters preserve selection within results; supporting-case navigation retains the selected rule in memory. A shared discard revision clears drafts only after guarded navigation is accepted. Matrix filters and learning actions have explicit labels, bounded tables, clear unavailable values and native confirmation dialogs.
+
+Sign-in preserves the demo selection. Discovery is an explicit operator-only dataset choice; its 40 cases never enter the public queue. Private traces show recorded states; A5 belongs to its own analytical run. A2 advisory totals never replace Python scores. A4 confidence means model-assessed evidence support. Historical absent fields say Not recorded.
+
+Public summary publication has a draft, server preview, explicit confirmation and revision check; withdrawal preserves immutable history. A0 learning exposes insufficiency, class-specific identity diversity and forward-validation progress. Approval and application are separate; reassessment and restoration are explicit 50-record actions without model calls. No sensitive route parameters, authentication persistence or chart dependency are introduced.
+
+
+## Brief reading order and usage explanation - 18 October 2026
+
+InvestigationBrief owns an ordered evidence-to-action narrative: Overview, Key findings, Counter-evidence, Missing information, Next steps, Limitations. The final four sections follow a winding two-row desktop layout with decorative connectors; mobile reverts to DOM order in one column. Source links and disclosures remain native and unchanged. Supporting model scores/classification and confidence follow the narrative, ahead of analyst review. UsageDisplay draws a chart only from reconciled categories; otherwise it shows the reported total and a plain explanation of incomplete reporting, with available counts beneath. It never invents a breakdown or hides unknown usage.
+
+
+### Case stage status
+
+The same connected four-stage trail is visible to both roles. Public visitors receive source/risk status and locked private AI/review stages, never inferred per-case operator results. Operators see case-wide completion for applicable, frozen or in-progress alerts; individual alert review remains separately labeled. A case-run completion refreshes sibling statuses from the operator queue without polling or unmounting the review form. Frozen feedback updates its check immediately and remains immutable.

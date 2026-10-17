@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 
-export function Dialog({ title, description, onClose, children, wide = false }: { title: string; description: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+export function Dialog({ title, description, onClose, children, wide = false, returnFocus }: { title: string; description: string; onClose: () => void; children: React.ReactNode; wide?: boolean; returnFocus?: HTMLElement | null }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = React.useId();
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
+    const previous = returnFocus || document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
     const dialog = ref.current!;
     dialog.showModal(); document.body.style.overflow = 'hidden';

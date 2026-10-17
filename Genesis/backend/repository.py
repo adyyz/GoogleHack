@@ -35,8 +35,8 @@ class Repository:
         # Retry only confirmed aborts; an unknown commit must never be repeated.
         for attempt in range(3):
             try: return operation(self.db.transaction())
-            except ValueError as exc:
-                if not isinstance(exc.__cause__, Aborted) or attempt == 2: raise
+            except (ValueError, Aborted) as exc:
+                if not (isinstance(exc, Aborted) or isinstance(exc.__cause__, Aborted)) or attempt == 2: raise
                 sleep(uniform(0.05, 0.2) * (attempt + 1))
 
     def get(self, collection: str, ident: str) -> dict | None:
@@ -75,6 +75,8 @@ class Repository:
             if not snapshot.exists: raise LookupError("Alert not found")
             alert = snapshot.to_dict()
             if alert["dataset_id"] != DATASET_ID: raise Conflict("Dataset mismatch")
+            if alert.get("feedback_revision", 0) > 0: raise Conflict("Verdict is frozen; saved feedback cannot be changed")
+            self.operational_case(alert["case_id"])
             if alert.get("feedback_revision", 0) != request.expected_revision: raise Conflict("Feedback changed; reload before submitting")
             run_id = alert.get("current_run_id")
             if not run_id or alert["status"] != "COMPLETE": raise Conflict("A completed AI triage run is required before operator feedback")
@@ -83,22 +85,38 @@ class Repository:
             if (not run or run.get("state") != "COMPLETE" or run.get("alert_id") != alert_id
                 or run.get("dataset_id") != alert["dataset_id"]): raise Conflict("A valid completed alert run is required")
             self._sealed_chain(transaction, run)
+            assessment_id = alert.get("latest_assessment_id")
+            if assessment_id != request.expected_assessment_id: raise Conflict("Machine assessment changed; refresh before reviewing")
+            assessment = None
+            if assessment_id:
+                document = self.db.collection("auto_label_assessments").document(assessment_id).get(transaction=transaction)
+                assessment = document.to_dict() if document.exists else None
+                if not assessment or content_hash(assessment["body"]) != assessment["content_hash"] or assessment["body"]["source_run_id"] != run_id:
+                    raise Conflict("Machine assessment integrity failed")
+            bundle = self.db.collection("config_versions").document(run["config_bundle_id"]).get(transaction=transaction).to_dict()
             revision = request.expected_revision + 1
             ident = f"{alert_id}-{revision}"
             event = {"id": ident, "schema_version": 1, "dataset_id": DATASET_ID, "case_id": alert["case_id"],
-                "alert_id": alert_id, "triage_run_id": run_id, **request.model_dump(exclude={"expected_revision"}),
-                "revision": revision, "actor_uid": actor, "provenance": "HUMAN_OPERATOR", "submitted_at": now()}
+                "alert_id": alert_id, "triage_run_id": run_id, **request.model_dump(exclude={"expected_revision", "expected_assessment_id"}),
+                "revision": revision, "actor_uid": actor, "provenance": "HUMAN_OPERATOR", "submitted_at": now(),
+                "detector_policy_id": bundle["body"].get("detector_version", "detector-v1"),
+                "auto_label_policy_id": assessment["body"]["label_policy_version"] if assessment else bundle["body"].get("auto_label_policy_version", "auto-label-v1"),
+                "machine_assessment_id": assessment_id, "assessment_hash": assessment["content_hash"] if assessment else None}
+            if assessment: event["machine_label"] = assessment["body"]["predicted_verdict"]
             transaction.create(self.db.collection("feedback_events").document(ident), event)
             transaction.update(alert_ref, {"feedback_revision": revision})
             transaction.create(self.db.collection("audit_events").document(uuid4().hex), {
                 "dataset_id": DATASET_ID, "action": "FEEDBACK_RECORDED", "object_id": ident,
                 "object_collection": "feedback_events", "actor": actor, "occurred_at": now(), "after_hash": content_hash(event)})
             return event
-        return write(tx)
+        return self._contended_transaction(write)
 
     def freeze_analytical_inputs(self, actor):
         from .evolution import analytical_inputs
         import json
+        cases = [row for row in self.list("cases") if row.get("split") in {"DEMO", "CALIBRATION_DISCOVERY"}]
+        case_ids = {row["id"] for row in cases}
+        customers = self.list("customers")
 
         @firestore.transactional
         def read(tx):
@@ -112,6 +130,10 @@ class Repository:
                 rows[collection] = [{"id": doc.id, **doc.to_dict()} for doc in query.stream(transaction=tx)]
                 if len(rows[collection]) > 10000: raise Conflict("Analytical input window exceeds demo capacity")
             alerts = {alert["id"]: alert for alert in rows["alerts"]}
+            alerts = {ident: alert for ident, alert in alerts.items() if alert["case_id"] in case_ids}
+            rows["alerts"] = list(alerts.values())
+            rows["feedback_events"] = [row for row in rows["feedback_events"] if row.get("alert_id") in alerts]
+            rows["step_runs"] = [row for row in rows["step_runs"] if row.get("alert_id") in alerts or row.get("leg_id") == "A5"]
             checked = set()
             for event in rows["feedback_events"]:
                 alert = alerts.get(event.get("alert_id"))
@@ -126,6 +148,12 @@ class Repository:
                 if (not run or run.get("state") != "COMPLETE" or run.get("alert_id") != alert["id"]
                     or run.get("dataset_id") != DATASET_ID): raise Conflict("Feedback requires a genuine completed run")
                 self._sealed_chain(tx, run)
+                if event.get("machine_assessment_id"):
+                    assessment = self.db.collection("auto_label_assessments").document(event["machine_assessment_id"]).get(transaction=tx)
+                    assessment = assessment.to_dict() if assessment.exists else None
+                    if (not assessment or content_hash(assessment["body"]) != event.get("assessment_hash")
+                        or assessment["body"]["source_run_id"] != run_id or assessment["body"]["predicted_verdict"] != event.get("machine_label")):
+                        raise Conflict("Frozen feedback assessment changed")
                 checked.add((run_id, alert["id"]))
             for step in rows["step_runs"]:
                 if step["state"] == "SUCCEEDED" and step["leg_id"] in {"A2", "A3", "A4", "A5", "EVALUATE"}:
@@ -133,7 +161,9 @@ class Repository:
                         or not step.get("validation", {}).get("schema_pass")
                         or (step["leg_id"] in {"A2", "A3", "A4"} and not step.get("validation", {}).get("evidence_pass"))):
                         raise Conflict("Succeeded model output has invalid provenance")
-            return analytical_inputs(manifest["manifest_hash"], rows["feedback_events"], rows["step_runs"], rows["alerts"])
+            from .rule_intelligence import statistics
+            computed = statistics(cases, customers, rows["alerts"], rows["feedback_events"], rows["step_runs"])
+            return analytical_inputs(manifest["manifest_hash"], rows["feedback_events"], rows["step_runs"], rows["alerts"], computed)
 
         body = read(self.db.transaction(read_only=True))
         if len(json.dumps(body, default=str).encode("utf-8")) > 800000: raise Conflict("Analytical snapshot exceeds demo capacity")
@@ -151,7 +181,9 @@ class Repository:
                 "action": "ANALYTICAL_INPUTS_FROZEN", "object_collection": "analytical_snapshots", "object_id": ident,
                 "actor": actor, "occurred_at": now(), "after_hash": ident})
             return result
-        return self._contended_transaction(persist)
+        result = self._contended_transaction(persist)
+        self.record_patterns(result["id"])
+        return result
 
     def evolution_context(self, snapshot_id):
         snapshot = self.get("analytical_snapshots", snapshot_id)
@@ -174,16 +206,24 @@ class Repository:
                 raise Conflict("Frozen feedback changed")
             feedback.append({**event, "rule_id": rules[event["alert_id"]]})
         reviewed_runs = {event["triage_run_id"] for event in feedback}
-        outputs = []
+        outputs, python_evidence = [], []
         for reference in body["succeeded_steps"]:
             step = self.get("step_runs", reference["id"])
             if not step or content_hash(step) != reference["hash"]: raise Conflict("Frozen succeeded step changed")
             if step["run_id"] in reviewed_runs and step["leg_id"] in {"A2", "A3", "A4"}:
                 outputs.append({"id": step["id"], "run_id": step["run_id"], "leg_id": step["leg_id"], "output": step["output"]})
+            if step["run_id"] in reviewed_runs and step["leg_id"] == "A1":
+                from .engine import risk_assessment
+                source = step["output"]
+                python_evidence.append({"run_id": step["run_id"], "signals": source["signals"],
+                    "protected_signals": source["protected_signals"], "missing_context": source["missing_context"],
+                    "risk": risk_assessment(source)})
         from .engine import candidate_options
         return {"analytical_inputs": body, "human_feedback": feedback, "sealed_model_suggestions": outputs,
+            "recorded_python_evidence": python_evidence,
             "candidate_allowlist": candidate_options(), "evidence_ids": body["latest_feedback_ids"],
-            "missing_context": [], "protected_signals": []}
+            "missing_context": [], "protected_signals": [],
+            "pattern_memory": body.get("pattern_memory", [])}
 
     def enqueue_evolution(self, snapshot_id, actor):
         self.evolution_context(snapshot_id)  # Validate immutable inputs before making work.
@@ -223,10 +263,31 @@ class Repository:
                 recommendation = {"id": run_id, "dataset_id": DATASET_ID, "evolution_run_id": run_id,
                     "state": "PROPOSED", "revision": 0, "config_version_id": version_id, "candidate": candidate,
                     "hypothesis": result["hypothesis"], "support_feedback_ids": result["support_feedback_ids"],
+                    "analytical_snapshot_id": run["analytical_snapshot_id"], "priority": "P2",
+                    "sample_sizes": {"conclusive_reviews": result["conclusive_reviews"], "target_rule_reviews": result["target_rule_reviews"]},
+                    "limitations": result["limitations"],
                     "diff": {"component": "DETECTOR", "rule_id": "HIGH_VALUE", "before": "detector-v1", "after": candidate},
                     "activation_allowed": False, "created_at": now()}
                 tx.create(self.db.collection("config_versions").document(version_id), {**version, "content_hash": version_id, "created_at": now()})
                 tx.create(self.db.collection("recommendations").document(run_id), recommendation)
+            if result["status"] != "SUPPORTED_PROPOSAL":
+                tx.create(self.db.collection("recommendations").document(run_id), {
+                    "id": run_id, "dataset_id": DATASET_ID, "evolution_run_id": run_id,
+                    "analytical_snapshot_id": run["analytical_snapshot_id"], "state": "PROPOSED", "revision": 0,
+                    "candidate": None, "config_version_id": None, "priority": "P2",
+                    "hypothesis": result["summary"], "support_feedback_ids": [],
+                    "sample_sizes": {"conclusive_reviews": result["conclusive_reviews"], "target_rule_reviews": result["target_rule_reviews"]},
+                    "limitations": result["limitations"], "activation_allowed": False, "created_at": now()})
+            for index, item in enumerate(result.get("recommendation_items", [])):
+                if item["kind"] == "DETECTOR_CHANGE": continue  # One canonical executable recommendation above.
+                item_id = stable_id(run_id, "informational", index)
+                tx.create(self.db.collection("recommendations").document(item_id), {
+                    "id": item_id, "dataset_id": DATASET_ID, "evolution_run_id": run_id,
+                    "analytical_snapshot_id": run["analytical_snapshot_id"], "state": "PROPOSED", "revision": 0,
+                    "kind": "INFORMATIONAL", "rule_id": item["rule_id"], "priority": "P2",
+                    "candidate": None, "config_version_id": None, "hypothesis": item["title"] + ': ' + item["rationale"],
+                    "support_feedback_ids": item["support_feedback_ids"], "activation_allowed": False,
+                    "limitations": ["Informational only; no executable detector candidate"], "created_at": now()})
             tx.update(run_ref, {"state": "COMPLETE", "stage": "A5", "checkpoint_step_id": step_id, "completed_at": now(), "error_code": None})
             tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
                 "action": "A5_RECORDED", "object_collection": "pipeline_runs", "object_id": run_id,
@@ -235,6 +296,7 @@ class Repository:
 
     def evolution_detail(self, run_id):
         from .usage import run_summary
+        from .agent_views import agent_trace
         run = self.get("pipeline_runs", run_id)
         if not run or run.get("kind") != "EVOLUTION" or run.get("dataset_id") != DATASET_ID: raise LookupError("Evolution run not found")
         result = None
@@ -246,6 +308,7 @@ class Repository:
                 raise Conflict("A validated real A5 result is required")
             result = step["output"]
         return {"run": run_summary(run), "analytical_snapshot_id": run["analytical_snapshot_id"],
+            "agent_trace": agent_trace(self.list("step_runs"), run_id, ("A5",)),
             "result": result, "recommendation": self.get("recommendations", run_id),
             "optimization_replays": {"prompt": "UNEVALUATED", "skill": "UNEVALUATED", "weight": "UNEVALUATED"},
             "activation_allowed": False}
@@ -260,6 +323,9 @@ class Repository:
             before = stored.to_dict()
             if before.get("dataset_id") != DATASET_ID: raise LookupError("Recommendation not found")
             if before.get("revision", 0) != request.expected_revision: raise Conflict("Recommendation changed; reload before reviewing")
+            if before.get("state") not in {"PROPOSED", "REVIEWED", "APPROVED"}:
+                raise Conflict("Recommendation is terminal; refresh its stored state")
+            if request.state == "APPROVED": self.application_evidence(ident, tx)
             update = {"state": request.state, "review_notes": request.notes, "reviewed_by": actor,
                 "reviewed_at": now(), "revision": request.expected_revision + 1, "activation_allowed": False}
             tx.update(ref, update)
@@ -267,7 +333,7 @@ class Repository:
                 "action": "RECOMMENDATION_REVIEWED", "object_collection": "recommendations", "object_id": ident,
                 "actor": actor, "occurred_at": now(), "before_hash": content_hash(before), "after_hash": content_hash({**before, **update})})
             return {"id": ident, **before, **update}
-        return review(self.db.transaction())
+        return self._contended_transaction(review)
 
     def freeze_candidate(self, request, actor):
         from .engine import candidate_options
@@ -365,6 +431,212 @@ class Repository:
         active = self.get("publications", "active")
         return self.get("publications", active["publication_id"]) if active else None
 
+    def active_policy(self, tx=None):
+        snapshot = self.db.collection("policy_controls").document(DATASET_ID).get(transaction=tx)
+        row = snapshot.to_dict() if snapshot.exists else {"revision": 0, "policy_version_id": "detector-v1"}
+        candidate = None
+        if row["policy_version_id"] != "detector-v1":
+            version = self.db.collection("config_versions").document(row["policy_version_id"]).get(transaction=tx).to_dict()
+            if not version or content_hash(version["body"]) != row["policy_version_id"]:
+                raise Conflict("Active detector policy integrity failed")
+            from .engine import candidate_options
+            candidate = version["body"]["candidate"]
+            if candidate not in candidate_options(): raise Conflict("Active policy is not allowlisted")
+        return {**row, "candidate": candidate}
+
+    def operational_case(self, case_id):
+        case = self.get("cases", case_id)
+        if not case: raise LookupError("Case not found")
+        if case.get("split") not in {"DEMO", "CALIBRATION_DISCOVERY"}: raise Conflict("Reserved evaluation cases are not operational investigations")
+        return case
+
+    def operator_queue(self, scope="demo"):
+        from .engine import retains_high_value
+        publication = self.publication()
+        if not publication: raise Conflict("No demonstration published")
+        policy = self.active_policy()
+        alerts = {row["id"]: row for row in self.list("alerts")}
+        cases = []
+        if scope not in {"demo", "discovery"}: raise ValueError("Unknown operational scope")
+        if scope == "discovery":
+            from .seed import public_cases
+            from .models import Split
+            sources = public_cases(self.load_dataset(), Split.DISCOVERY)
+        else: sources = publication["public_cases"]
+        for source in sources:
+            rows = []
+            for baseline in source["alerts"]:
+                alert = alerts[baseline["id"]]
+                frozen = alert.get("feedback_revision", 0) > 0
+                applicable = alert["rule_id"] != "HIGH_VALUE" or retains_high_value(source["evidence"], policy["candidate"])
+                rows.append({**baseline, "status": alert["status"], "feedback_revision": alert.get("feedback_revision", 0),
+                    "applicable": applicable, "frozen": frozen,
+                    "actionable": applicable and not frozen,
+                    "current_run_id": alert.get("current_run_id")})
+            progress = {"awaiting_triage": sum(row["applicable"] and not row["frozen"] and row["status"] not in {"COMPLETE", "RUNNING"} for row in rows),
+                "awaiting_review": sum(not row["frozen"] and row["status"] == "COMPLETE" for row in rows),
+                "in_progress": sum(row["status"] == "RUNNING" for row in rows),
+                "frozen": sum(row["frozen"] for row in rows), "excluded": sum(not row["applicable"] for row in rows)}
+            cases.append({**source, "alerts": rows, "progress": progress})
+        generation_id = content_hash({"policy": policy, "cases": [{"id": row["id"], "alerts": row["alerts"]} for row in cases]})
+        from .calibration import active_label_policy
+        labels = active_label_policy(self)
+        return {"cases": cases, "scope": scope, "auto_label_policy_version": labels["policy_version_id"],
+            "policy_version_id": policy["policy_version_id"], "policy_revision": policy["revision"],
+            "generation_id": generation_id}
+
+    def record_patterns(self, snapshot_id):
+        snapshot = self.get("analytical_snapshots", snapshot_id)
+        groups = {stable_id(DATASET_ID, row["rule_id"], row["typology"], row["detector_policy_id"]): row
+            for row in snapshot["body"].get("pattern_memory", [])}
+        for ident, group in groups.items():
+            ref = self.db.collection("evolution_patterns").document(ident)
+            @firestore.transactional
+            def persist(tx):
+                snapshot = ref.get(transaction=tx)
+                existing = snapshot.to_dict() if snapshot.exists else {}
+                support = sorted(set(existing.get("support_feedback_ids", [])) | set(group["support_feedback_ids"]))
+                new_support = support != existing.get("support_feedback_ids")
+                if not new_support and snapshot_id in existing.get("snapshot_ids", []): return
+                tx.set(ref, {**existing, **group, "id": ident, "dataset_id": DATASET_ID,
+                    "support_feedback_ids": support, "support_strength": min(len(support) / 15, 1),
+                    "strength_is_probability": False,
+                    "snapshot_ids": sorted(set(existing.get("snapshot_ids", [])) | {snapshot_id}),
+                    "first_observed_at": existing.get("first_observed_at", now()),
+                    "last_observed_at": now() if new_support else existing["last_observed_at"],
+                    "status": "ACTIVE" if new_support else existing.get("status", "ACTIVE"), "revision": existing.get("revision", 0) + 1})
+            self._contended_transaction(persist)
+
+    def update_pattern(self, ident, request, actor):
+        ref = self.db.collection("evolution_patterns").document(ident)
+        @firestore.transactional
+        def update(tx):
+            snapshot = ref.get(transaction=tx)
+            row = snapshot.to_dict() if snapshot.exists else None
+            if not row or row.get("dataset_id") != DATASET_ID: raise LookupError("Pattern not found")
+            if row["revision"] != request.expected_revision: raise Conflict("Pattern changed; refresh")
+            changes = {"status": request.status, "revision": row["revision"] + 1}
+            tx.update(ref, changes)
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+                "action": "PATTERN_STATUS_CHANGED", "object_collection": "evolution_patterns", "object_id": ident,
+                "actor": actor, "occurred_at": now(), "notes": request.notes, "after_hash": content_hash(changes)})
+            return {"id": ident, **row, **changes}
+        return self._contended_transaction(update)
+
+    def application_evidence(self, recommendation_id, tx=None):
+        def read(collection, ident):
+            snapshot = self.db.collection(collection).document(ident).get(transaction=tx)
+            return {"id": snapshot.id, **snapshot.to_dict()} if snapshot.exists else None
+        recommendation = read("recommendations", recommendation_id)
+        run = read("pipeline_runs", recommendation_id)
+        if (not recommendation or recommendation.get("dataset_id") != DATASET_ID or not run
+            or run.get("kind") != "EVOLUTION" or run.get("state") != "COMPLETE" or run.get("dataset_id") != DATASET_ID):
+            raise Conflict("A genuine completed recommendation is required")
+        step = self._leg_step(tx, run, "A5")
+        snapshot = read("analytical_snapshots", run["analytical_snapshot_id"])
+        frozen = read("candidate_freezes", stable_id(DATASET_ID, "heldout"))
+        simulation = read("simulations", frozen["id"]) if frozen else None
+        from .engine import candidate_options
+        from .evolution import candidate_identity, sufficiency
+        candidate = recommendation.get("candidate")
+        if (not snapshot or content_hash(snapshot["body"]) != run["analytical_snapshot_id"]
+            or not step or step.get("state") != "SUCCEEDED" or step.get("execution_provenance") != "REAL_PROVIDER"
+            or step.get("config_bundle_id") != run["config_bundle_id"] or step.get("dataset_id") != DATASET_ID
+            or not step.get("validation", {}).get("schema_pass") or not step.get("validation", {}).get("evidence_pass")
+            or (step.get("output") or {}).get("status") != "SUPPORTED_PROPOSAL" or candidate not in candidate_options()
+            or step["output"].get("candidate_id") != candidate["id"]):
+            raise Conflict("Insufficient or unsupported evidence; application is unavailable")
+        gate = snapshot["body"]["detector_gate"]
+        if sufficiency(gate["conclusive_reviews"], gate["target_rule_reviews"])["status"] != "SUFFICIENT_EVIDENCE":
+            raise Conflict("Insufficient reviews; application is unavailable")
+        if (not frozen or not simulation or simulation.get("state") != "COMPLETE"
+            or frozen.get("evolution_run_id") != run["id"] or frozen.get("support_status") != "FEEDBACK_SUPPORTED"
+            or frozen.get("candidate_hash") != candidate_identity(snapshot["body"]["dataset_hash"], candidate)
+            or simulation.get("candidate_hash") != frozen["candidate_hash"]
+            or simulation.get("freeze_hash") != frozen["content_hash"]
+            or simulation["started_at"] < frozen["frozen_at"]):
+            raise Conflict("A supported frozen candidate and completed held-out comparison are required")
+        frozen_body = {key: value for key, value in frozen.items() if key not in {"id", "dataset_id", "content_hash", "frozen_at", "schema_version", "created_at"}}
+        if content_hash(frozen_body) != frozen["content_hash"]:
+            raise Conflict("Frozen candidate integrity failed")
+        metrics = simulation["metrics"]
+        if (metrics.get("provenance") != "DETERMINISTIC_SYNTHETIC_REFERENCE_REPLAY"
+            or metrics.get("dataset_hash") != snapshot["body"]["dataset_hash"] or metrics.get("candidate") != candidate
+            or not metrics.get("case_ids") or metrics.get("benign_alerts_removed", 0) <= 0
+            or metrics.get("additional_missed_case_ids")):
+            raise Conflict("No measured safe benefit; application is unavailable")
+        return {"candidate": candidate, "metrics": metrics, "simulation_id": simulation["id"],
+            "candidate_hash": frozen["candidate_hash"]}
+
+    def recommendation_view(self, row):
+        policy = self.active_policy()
+        try:
+            evidence = self.application_evidence(row["id"])
+            eligible, reason, priority = True, None, "P1"
+        except Conflict as exc:
+            evidence = None
+            eligible, reason, priority = False, str(exc), "P2"
+        simulation = self.get("simulations", stable_id(DATASET_ID, "heldout"))
+        if simulation and simulation.get("state") == "COMPLETE" and simulation["metrics"].get("candidate") == row.get("candidate"):
+            if simulation["metrics"].get("additional_missed_case_ids"): priority = "P0"
+            measured = {key: simulation["metrics"][key] for key in ("baseline", "candidate_metrics", "benign_alerts_removed", "suspicious_alerts_removed")}
+        else: measured = None
+        events = [event for event in self.list("feedback_events") if row.get("applied_policy_id")
+            and event.get("detector_policy_id") == row["applied_policy_id"]]
+        return {**row, "priority": priority, "eligible_to_apply": eligible and policy["policy_version_id"] == "detector-v1",
+            "application_block_reason": reason or ("Roll back the active policy before applying another baseline comparison" if policy["policy_version_id"] != "detector-v1" else None),
+            "active_policy": policy, "measured_what_if": measured,
+            "expected_effects": "Synthetic replay only; future analyst outcomes are unknown",
+            "post_apply": {"reviewed_alerts": len(events), "true_positive": sum(event["verdict"] == "TRUE_POSITIVE" for event in events),
+                "false_positive": sum(event["verdict"] == "FALSE_POSITIVE" for event in events),
+                "status": "OBSERVED_REVIEWS_ONLY" if events else "NOT_YET_OBSERVED", "queue_effects": row.get("queue_effects")}}
+
+    def apply_recommendation(self, ident, request, actor, rollback=False):
+        ref = self.db.collection("recommendations").document(ident)
+        control_ref = self.db.collection("policy_controls").document(DATASET_ID)
+        @firestore.transactional
+        def apply(tx):
+            snapshot = ref.get(transaction=tx)
+            row = snapshot.to_dict() if snapshot.exists else None
+            if not row or row.get("dataset_id") != DATASET_ID: raise LookupError("Recommendation not found")
+            policy = self.active_policy(tx)
+            if row["revision"] != request.expected_revision or policy["revision"] != request.expected_policy_revision:
+                raise Conflict("Recommendation or policy changed; refresh before applying")
+            if rollback:
+                if row["state"] != "APPLIED" or policy["policy_version_id"] != row.get("applied_policy_id"):
+                    raise Conflict("Only the currently active application can be rolled back")
+                target = row["previous_policy_id"]
+                changes = {"state": "ROLLED_BACK", "revision": row["revision"] + 1, "rolled_back_at": now()}
+            else:
+                if row["state"] != "APPROVED" or policy["policy_version_id"] != "detector-v1":
+                    raise Conflict("Approve a supported recommendation against the active baseline first")
+                evidence = self.application_evidence(ident, tx)
+                body = {"kind": "DETECTOR_POLICY", "baseline": "detector-v1", "candidate": evidence["candidate"],
+                    "recommendation_id": ident, "simulation_id": evidence["simulation_id"], "candidate_hash": evidence["candidate_hash"]}
+                target = content_hash(body)
+                version_ref = self.db.collection("config_versions").document(target)
+                version = version_ref.get(transaction=tx)
+                if version.exists and version.to_dict().get("body") != body:
+                    raise Conflict("Existing detector policy integrity failed")
+                publication_ref = self.db.collection("publications").document("active")
+                publication_pointer = publication_ref.get(transaction=tx).to_dict()
+                publication = self.db.collection("publications").document(publication_pointer["publication_id"]).get(transaction=tx).to_dict()
+                from .engine import retains_high_value
+                excluded = sum(alert["rule_id"] == "HIGH_VALUE" and not retains_high_value(case["evidence"], evidence["candidate"])
+                    for case in publication["public_cases"] for alert in case["alerts"])
+                changes = {"state": "APPLIED", "revision": row["revision"] + 1, "applied_policy_id": target,
+                    "previous_policy_id": policy["policy_version_id"], "applied_at": now(),
+                    "queue_effects": {"scope": "PUBLISHED_DEMO_APPLICABILITY", "excluded_alerts": excluded}}
+                if not version.exists: tx.create(version_ref, {"body": body, "content_hash": target, "created_at": now(), "kind": "DETECTOR_POLICY"})
+            tx.set(control_ref, {"policy_version_id": target, "revision": policy["revision"] + 1, "updated_at": now()})
+            tx.update(ref, changes)
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+                "action": "DETECTOR_POLICY_ROLLED_BACK" if rollback else "DETECTOR_POLICY_APPLIED",
+                "object_collection": "recommendations", "object_id": ident, "actor": actor, "occurred_at": now(),
+                "notes": request.notes, "from_policy": policy["policy_version_id"], "to_policy": target})
+            return {"id": ident, **row, **changes, "policy_version_id": target}
+        return self._contended_transaction(apply)
+
     def page(self, collection: str, limit=50, cursor: str | None = None, filters=(), order="__name__") -> dict:
         query = self.db.collection(collection)
         for field, value in filters:
@@ -380,9 +652,11 @@ class Repository:
         rows = [{"id": doc.id, **doc.to_dict()} for doc in query.limit(limit + 1).stream(timeout=10)]
         return {"items": rows[:limit], "next_cursor": rows[limit - 1]["id"] if len(rows) > limit else None}
 
-    def ensure_baseline(self):
+    def ensure_baseline(self, detector_policy_id=None, auto_label_policy_id=None):
         from google.api_core.exceptions import AlreadyExists
         from .engine import WEIGHTS, candidate_options
+        from .calibration import active_label_policy
+        auto_label_policy_id = auto_label_policy_id or active_label_policy(self)["policy_version_id"]
         components = {}
         versions = [("RISK_POLICY", "RISK_POLICY", {"weights": WEIGHTS}),
             ("CONTEXT", "CONTEXT", {"evidence_version": "evidence-v1", "reference_labels_allowed": False})]
@@ -404,10 +678,12 @@ class Repository:
             except AlreadyExists: pass
             components[key] = ident
         bundle = {"kind": "BUNDLE", "origin": "BASELINE", "component_ids": components,
-            "body": {"detector_version": "detector-v1", "candidate_allowlist": candidate_options()}}
+            "body": {"detector_version": detector_policy_id or self.active_policy()["policy_version_id"],
+                "auto_label_version": "auto-label-v1", "auto_label_policy_version": auto_label_policy_id,
+                "candidate_allowlist": candidate_options()}}
         if self.settings.local_gemini_enabled:
             bundle["body"].update({"model_id": self.settings.active_model_id, "provider": "GEMINI_DEVELOPER_API",
-                "attempts_per_leg": 2, "max_daily_attempts": 12})
+                "attempts_per_leg": 2, "max_daily_attempts": 120})
         elif self.settings.mode == "cloud":
             bundle["body"].update({"model_id": self.settings.model_id, "provider": "GOOGLE_CLOUD",
                 "location": self.settings.verified_cloud_location, "attempts_per_leg": 2, "max_daily_attempts": 120})
@@ -731,7 +1007,6 @@ class Repository:
             if daily["revision"] != request.expected_revision: raise Conflict("Controls changed; reload before saving")
             if request.limit < daily["attempts_reserved"]: raise Conflict("Limit cannot be below reserved attempts")
             if request.live_enabled and not self.settings.ai_authorized(): raise Conflict("Unexpired verified cloud credits or local Gemini free-tier access are required")
-            if self.settings.local_gemini_enabled and request.limit > 12: raise Conflict("Local Gemini testing is limited to 12 attempts per UTC day")
             updated = UsageDaily.model_validate({**daily, "limit": request.limit, "live_enabled": request.live_enabled,
                 "credit_verified_until": self.settings.ai_verified_until, "revision": daily["revision"] + 1}).model_dump()
             tx.set(ref, updated)
@@ -811,8 +1086,7 @@ class Repository:
             if now().date().isoformat() != day: raise Conflict("UTC_DAY_CHANGED")
             if daily.attempts_reserved != len(set(daily.reserved_attempt_ids)) or step.id in daily.reserved_attempt_ids:
                 raise Conflict("RESERVATION_INCONSISTENT")
-            effective_limit = min(daily.limit, 12) if self.settings.local_gemini_enabled else daily.limit
-            if daily.attempts_reserved >= effective_limit: raise Conflict("CAP_REACHED")
+            if daily.attempts_reserved >= daily.limit: raise Conflict("CAP_REACHED")
             if step.worker_lease:
                 if step.worker_lease.run_id != (run.get("parent_run_id") or run["id"]): raise Conflict("WORKER_RUN_LINK_INVALID")
                 self._check_worker_lease(tx, step.worker_lease, reserve_seconds=35)
@@ -850,23 +1124,51 @@ class Repository:
             "attempts": [attempt_summary(step) for step in sorted(steps, key=lambda s: (s["run_id"], s["started_at"], s["attempt_number"]))],
             "usage": summarize(steps)}
 
-    def enqueue_triage(self, alert_ids, actor):
+    def enqueue_triage(self, alert_ids, actor, expected_policy_version=None, expected_auto_label_policy_version=None):
         if len(set(alert_ids)) != len(alert_ids): raise ValueError("Duplicate alert IDs are not allowed")
         alerts = [self.get("alerts", ident) for ident in alert_ids]
         if any(not alert or alert["dataset_id"] != DATASET_ID for alert in alerts): raise LookupError("Alert not found")
         case_id = alerts[0]["case_id"]
         if any(alert["case_id"] != case_id for alert in alerts): raise ValueError("Choose alerts from one case")
-        all_ids = {alert["id"] for alert in self.list("alerts") if alert["case_id"] == case_id}
-        if set(alert_ids) != all_ids: raise ValueError("Send all alerts on the selected case")
+        self.operational_case(case_id)
+        from .engine import enrich
+        all_alerts = [row for row in self.list("alerts") if row["case_id"] == case_id]
+        publication = self.publication()
+        published_case = next((row for row in publication["public_cases"] if row["id"] == case_id), None) if publication else None
+        # Non-demo integration fixtures may enqueue a known case before publication.
+        evidence = published_case["evidence"] if published_case else enrich(self.load_dataset(), self.load_dataset().cases[case_id])
+        policy = self.active_policy()
+        if expected_policy_version is None and policy["policy_version_id"] != "detector-v1":
+            raise Conflict("Policy changed; refresh the investigation queue")
+        if expected_policy_version is not None and expected_policy_version != policy["policy_version_id"]:
+            raise Conflict("Policy changed; refresh the investigation queue")
+        from .calibration import active_label_policy
+        label_policy = active_label_policy(self)
+        if expected_auto_label_policy_version is not None and expected_auto_label_policy_version != label_policy["policy_version_id"]:
+            raise Conflict("A0 policy changed; refresh the investigation queue")
+        bundle_id = self.ensure_baseline(policy["policy_version_id"], label_policy["policy_version_id"])
         alert_ids = sorted(alert_ids)
-        bundle_id = self.ensure_baseline()
         parent_id = uuid4().hex
         children = {ident: uuid4().hex for ident in alert_ids}
-        refs = [self.db.collection("alerts").document(ident) for ident in alert_ids]
+        refs = [self.db.collection("alerts").document(row["id"]) for row in all_alerts]
 
         @firestore.transactional
         def enqueue(tx):
+            from .engine import retains_high_value
+            current_policy = self.active_policy(tx)
+            current_labels = active_label_policy(self, tx)
+            if current_labels["policy_version_id"] != label_policy["policy_version_id"]:
+                raise Conflict("A0 policy changed; refresh the investigation queue")
+            if current_policy["policy_version_id"] != policy["policy_version_id"]:
+                raise Conflict("Policy changed; refresh the investigation queue")
             snapshots = [ref.get(transaction=tx) for ref in refs]
+            eligible = {snapshot.id for snapshot in snapshots if snapshot.to_dict().get("feedback_revision", 0) == 0
+                and (snapshot.to_dict()["rule_id"] != "HIGH_VALUE" or retains_high_value(evidence, current_policy["candidate"]))}
+            if set(alert_ids) != eligible:
+                message = "Send all actionable, unfrozen alerts on the selected case; refresh the queue"
+                if any(snapshot.id in alert_ids and snapshot.to_dict().get("feedback_revision", 0) > 0 for snapshot in snapshots):
+                    raise Conflict(message)
+                raise ValueError(message)
             latest = {snapshot.to_dict().get("latest_parent_run_id") for snapshot in snapshots}
             parents = [self.db.collection("pipeline_runs").document(ident).get(transaction=tx) for ident in latest if ident]
             for parent in parents:
@@ -874,12 +1176,13 @@ class Repository:
             parent = PipelineRun(id=parent_id, dataset_id=DATASET_ID, kind="TRIAGE_BATCH", case_id=case_id,
                 config_bundle_id=bundle_id, actor_uid=actor, child_run_ids=list(children.values())).model_dump()
             tx.create(self.db.collection("pipeline_runs").document(parent_id), {**parent, "created_at": now()})
-            for ref, alert_id in zip(refs, alert_ids):
+            for alert_id in alert_ids:
+                ref = self.db.collection("alerts").document(alert_id)
                 child = PipelineRun(id=children[alert_id], dataset_id=DATASET_ID, kind="TRIAGE_ALERT", parent_run_id=parent_id,
                     alert_id=alert_id, case_id=case_id, config_bundle_id=bundle_id, actor_uid=actor).model_dump()
                 tx.create(self.db.collection("pipeline_runs").document(child["id"]), {**child, "created_at": now()})
                 tx.update(ref, {"latest_run_id": child["id"], "latest_parent_run_id": parent_id,
-                    "status": "PENDING", "current_run_id": None, "priority": None})
+                    "status": "PENDING", "current_run_id": None, "latest_assessment_id": None, "priority": None})
             tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
                 "action": "QUEUED", "object_collection": "pipeline_runs", "object_id": parent_id,
                 "run_id": parent_id, "actor": actor, "occurred_at": now()})
@@ -892,6 +1195,7 @@ class Repository:
         latest = self.get("pipeline_runs", alert["latest_run_id"]) if alert.get("latest_run_id") else None
         if alert.get("latest_run_id") and (not latest or latest.get("dataset_id") != DATASET_ID or latest.get("alert_id") != alert_id):
             raise Conflict("Latest run linkage is inconsistent")
+        self.operational_case(alert["case_id"])
         from .usage import run_summary
         # Only validated output from successful private steps can become a brief.
         output = {}
@@ -904,4 +1208,13 @@ class Repository:
                     raise Conflict("A completed alert triage is required")
                 return {step["leg_id"]: step["output"] for step in self._sealed_chain(tx, run)}
             output = read_output(self.db.transaction(read_only=True))
-        return {"alert": alert, "latest_run": run_summary(latest) if latest else None, "outputs": output}
+        from .agent_views import advisory_view, agent_trace
+        from .engine import risk_assessment
+        evidence = output.get("A1")
+        assessment = self.get("auto_label_assessments", alert["latest_assessment_id"]) if alert.get("latest_assessment_id") else None
+        if assessment and (content_hash(assessment["body"]) != assessment["content_hash"] or assessment["body"]["source_run_id"] != alert.get("current_run_id")):
+            raise Conflict("Assessment integrity failed")
+        return {"alert": alert, "latest_run": run_summary(latest) if latest else None, "outputs": output,
+            "effective_assessment": assessment,
+            "agent_trace": agent_trace(self.list("step_runs"), latest["id"]) if latest else [],
+            "advisory": advisory_view(output.get("A2"), risk_assessment(evidence)) if evidence else None}

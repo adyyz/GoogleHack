@@ -1,5 +1,18 @@
 # Local code to cloud integration handoff
 
+Current identity workflow checkpoint (18 October): identity filtering, A0 pre-labels, frozen analyst review, pattern memory and gated operator policy transitions are implemented and locally verified (91 unit / 13 isolated integration passes, production build and browser checks). Genuine revised parent `4480b581c44d43f7af2de0faa02bf457` and human review `68db2eb6687dedf655fb304d-1` are saved. No policy was applied. Earlier `hv-15000` is frozen and evaluated with no improvement, so it cannot qualify for application. Earlier statements below about unopened held-out data are historical. Local emulator evidence is not synchronized to cloud Firestore. Cloud build/update, Vertex activation and public publication remain gated.
+
+
+Latest: user removed the special local 12-attempt ceiling; local reservations now follow the configured admin limit up to 120 (cloud configuration unchanged). Corrected-context parent `c1b25ced99e74585a2f17d94553830d6` and genuine A5 `da3c6b833d9ac65ecb634083` are complete. A5 reports actual 1 overall / 0 target-rule reviews and INSUFFICIENT_EVIDENCE. Candidate freeze remains human-owned and held-out data is unopened. Source `ab0ff27c...` passed 82 unit tests, all 12 isolated integration checks and production build; the genuine A5 UI was also verified without mutations. The checkpoint below is historical.
+
+## Current continuation checkpoint — 17 October 2026
+
+Local genuine investigation, both completed alert chains, the human review and immutable analytical snapshot were reverified without writes. Daily reservations are 12/12 and the expired local window is disabled. The next UTC day starts at 11:00 Sydney on 18 October. This is an application safety limit, not Google's published quota.
+
+Remaining order: bounded local Free Tier re-enablement, one corrected-context investigation with manual currency/source grounding, genuine A5 with actual insufficient sample counts, the human operator's explicit candidate freeze, one stored held-out comparison, refreshed evidence and final package, private deployment, then funded/verified Vertex multi-model and authenticated worker testing. Preserve existing failures and human decisions. Never generate a verdict or freeze on the operator's behalf. The detailed workspace-only checklist is `docs/local-to-private-verification.md`; it is intentionally excluded from the clean source export.
+
+Real Firebase Auth/Firestore are already connected to private staging and 12 cloud cases load. Local emulators do not synchronize their investigation/review records to cloud Firebase. Cloud AI/tasks remain off and the public repository remains on hold. A final build/update and later model activation need concrete spending scopes; prior one-build approvals are consumed.
+
 Prepared locally on 17 October 2026. This guide does not authorize cloud writes, model calls, secret access or publication. The resource setup guide remains the ordered infrastructure runbook. Keep every AI/task switch disabled until verified funding, identities and the specific execution window are approved.
 
 ## Verify the same sources

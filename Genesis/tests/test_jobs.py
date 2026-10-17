@@ -61,7 +61,7 @@ def test_context_preserves_facts_and_protected_sequence_without_labels():
     assert "reference_labels" not in context and "reference_reasons" not in context
     # Classification consumes code-owned risk/facts, not a duplicated narrative history.
     classification = context_for("A3", evidence, risk_assessment(evidence), {"A2": {"limitations": ["test-only"]}})
-    assert classification["previous_outputs"] == {} and "chronology" not in classification
+    assert classification["previous_outputs"]["A2_advisory"]["status"] == "NOT_RECORDED" and "chronology" not in classification
     assert classification["risk"] == risk_assessment(evidence)
     assert set(classification["evidence_ids"]) == {evidence[key]["id"] for key in ("customer", "account", "trigger")}
     assert len(classification["evidence_ids"]) < len(evidence["evidence_ids"])

@@ -31,7 +31,7 @@ try {
         $env:LOCAL_GEMINI_ENABLED = 'true'
         $env:LOCAL_GEMINI_FREE_VERIFIED = 'true'
         $env:LOCAL_GEMINI_VERIFIED_UNTIL = [DateTime]::UtcNow.AddHours(1).ToString('o')
-        Write-Output 'Local Developer API opt-in expires in one hour. Today''s separate admin switch and the 12-attempt daily cap still apply.'
+        Write-Output 'Local Developer API opt-in expires in one hour. Today''s separate admin switch and configured limit (up to 120 attempts) still apply.'
     }
     if ($Action -eq 'Smoke') {
         & (Join-Path $PSScriptRoot 'python.ps1') -m backend.gemini_smoke

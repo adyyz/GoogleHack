@@ -209,6 +209,62 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "feedback_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataset_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "submitted_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "auto_label_calibrations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataset_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "auto_label_candidates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataset_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "frozen_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "auto_label_assessments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dataset_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -280,6 +336,31 @@
     {
       "collectionGroup": "simulations",
       "fieldPath": "metrics",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "auto_label_candidates",
+      "fieldPath": "training",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "auto_label_candidates",
+      "fieldPath": "validation",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "auto_label_assessments",
+      "fieldPath": "body",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "auto_label_calibrations",
+      "fieldPath": "results",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "evolution_publications",
+      "fieldPath": "body",
       "indexes": []
     }
   ]

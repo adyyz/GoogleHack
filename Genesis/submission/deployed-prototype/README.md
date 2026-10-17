@@ -1,6 +1,16 @@
+## Current local replacement - 18 October 2026
+
+The Evolution rule-intelligence candidate is [genesis-build-candidate-8cacba49b88ce5d1.zip](genesis-build-candidate-8cacba49b88ce5d1.zip). SHA-256: `f40a571425f0cfbae9f463d426730f341c17f6734843afd80d3875caf71a1ad4`.
+
+Source fingerprint: `8cacba49b88ce5d1578a95869ce0795562b04d41d62b1cfb7ce8aeaf8150f31d`. Local checks: 108 unit passes, 16 isolated Firebase integration passes without integration skips, production build, browser journeys and strict design checks. Genuine investigation, user-frozen feedback and A5 v2 were verified locally. Learning remains insufficient (4 overall / 2 HIGH_VALUE reviews); no policy was applied.
+
+Status: **PREPARED_NOT_SUBMITTED**. Archive integrity and Cloud Build SDK schema passed. The package includes reviewed Firestore index/rules files under `deployment/`; neither was applied to cloud. Existing image digests/revisions remain the deployed baseline. A new build/private-service update requires its separate spending gate, and Vertex/public repository publication remain gated. Internal context, credentials and evidence caches are excluded.
+
 # Live deployed prototype
 
-Required: a deployed prototype link that remains available throughout evaluation. Status: not deployed. Billing linkage alone does not verify funded coverage or authorize execution.
+Required: a deployed prototype link that remains available throughout evaluation. Status: private staging deployed and verified; public release pending. Billing linkage alone does not verify funded coverage or authorize further execution.
+
+Current source `efd33c4f51cc7bf6` passed 82 unit / 11 fresh integration tests, build and full browser journeys. Approved build `0d25fbe5-add3-466c-895f-6e2325c71a94` succeeded; current private revisions are web `genesis-demo-web-00003-v25` and worker `genesis-demo-worker-00004-5b9`. AI/tasks remain off. The public prototype acceptance box remains open. [Actual deployment and recovery evidence](../../docs/deployment-recovery.md) distinguishes this from older snapshots below.
 
 Start with the [step-by-step HTML resource/setup guide](resource-setup-guide.html): naming inventory, dependency order, PowerShell command examples, IAM boundaries, cloud configuration, deployment checks and recovery. It is an offline reference, not a cloud installer. Proposed resource names and blocked source-publication work are explicit.
 
@@ -18,7 +28,7 @@ Start with the [step-by-step HTML resource/setup guide](resource-setup-guide.htm
 
 Public prototype URL: **Pending**.
 
-Web/private-worker revision IDs: **Pending**.
+Web/private-worker revision IDs: **`genesis-demo-web-00003-v25` / `genesis-demo-worker-00004-5b9` (private staging)**.
 
 Evaluation availability window and health-check responsibility: **Pending**.
 
@@ -33,3 +43,10 @@ The bundle contains 40 exact runtime/build-context files from the verified sourc
 Extracted working copy: `.cache/build/6cd03b64cc2d6616/` under Genesis. Run its `verify-package.py` with the project Python for an offline hash check. The README gives local Docker commands and the optional future Google Cloud Build route. JSON schema, Docker image building and user-managed build identities are documented in [Google's configuration reference](https://docs.cloud.google.com/build/docs/build-config-file-schema), [image-building guide](https://docs.cloud.google.com/build/docs/building/build-containers) and [service-account guide](https://docs.cloud.google.com/build/docs/securing-builds/configure-user-specified-service-accounts), reviewed 17 October.
 
 Offline integrity, corruption refusal, archive CRCs, privacy selection and repeated byte-identical packaging passed. The cloud template deliberately contains an unconfigured build identity. Cloud Build was not in the earlier local-build route; its coverage, source staging/storage, identity/IAM and bounded cost need review before any remote submission. No build, push, trigger, API enablement, IAM change, deployment or live model call was performed. Local image build/start remains blocked by the missing Docker/Podman engine; that acceptance gate is unchanged.
+# Updated local candidate — not submitted
+
+`genesis-build-candidate-ab0ff27cddfc5918.zip` contains tested source `ab0ff27cddfc5918495c8d7ba87f54ab90fcf666259e4d3a86f74001958aab2a`, including removal of the special local 12-attempt ceiling. SHA256: `8c163047411481a14276e34e4dd8472d79523f557a56511a241a38b882ee1929`. Package integrity and Cloud Build SDK schema passed. Local checks: 82 unit tests, 12 fresh emulator integration tests, production build and genuine A5 result display. No new cloud build/image/update is claimed. The currently deployed private source remains `efd33c4f...`. Human candidate freeze, held-out comparison and full funded cloud AI testing remain pending.
+
+
+
+Latest local candidate (18 October 2026): `genesis-build-candidate-e8d4de34cecf4f82.zip`, SHA-256 `18b87bb22ad449a889ae46d06cca7717d07b5ad7d2feed1a8eab11b25e0d1edb`. Source fingerprint `e8d4de34cecf4f8236ab4507298453f70425796ce7678cfcb258c8a4385decbf`. Includes the identity/review/A0/Evolution policy workflow, verified by 91 unit passes, 13 isolated integration passes, production build and browser journeys. Genuine revised triage, frozen human feedback and A5 insufficient-evidence result are verified locally. Package integrity and Cloud Build configuration schema passed; images are not built and this candidate has not been submitted or deployed. New cloud execution authorization is required. Current deployed services remain on the earlier efd33 source.

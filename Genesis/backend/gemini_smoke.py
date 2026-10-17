@@ -57,7 +57,7 @@ def smoke():
     finally:
         daily = repo.daily_control()
         repo.update_daily_control(DailyControlRequest(expected_revision=daily["revision"], live_enabled=False,
-            limit=max(1, min(12, daily["limit"]))), "local-smoke-operator")
+            limit=max(1, daily["limit"])), "local-smoke-operator")
 
 
 if __name__ == "__main__":

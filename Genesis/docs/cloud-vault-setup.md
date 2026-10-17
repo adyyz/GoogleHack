@@ -1,5 +1,7 @@
 # Cloud connection vault: guided setup
 
+> Completion audit ? 18 October 2026: The existing testing_free_gemini_api secret, metadata and payload-suppressed local access have been verified; web/worker/task identities exist. Do not create another illustrative test secret. Complete cloud runtime access and billing coverage remain separate acceptance checks.
+
 ## Current state — 16 October 2026
 
 Latest key rotation: version 1 is now destroyed; metadata confirmed version **2** enabled. The reader defaults to pinned version **2**, not `latest`. One explicitly approved Developer API smoke test using version 2 passed (74 provider-reported tokens), and its local live switch was disabled afterward. No deployment occurred. The earlier version-1 access below is historical evidence.

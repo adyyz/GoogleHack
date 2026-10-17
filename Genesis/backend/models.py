@@ -80,6 +80,7 @@ class FeedbackRequest(BaseModel):
     notes: str = Field(min_length=1, max_length=2000)
     override_action: Literal["ESCALATE", "REVIEW", "MONITOR", "CLOSE"] | None = None
     expected_revision: int = Field(ge=0)
+    expected_assessment_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{24}$")
 
 
 class Finding(BaseModel):
@@ -88,11 +89,27 @@ class Finding(BaseModel):
     evidence_ids: list[str] = Field(min_length=1, max_length=30)
 
 
+class AdvisoryDimensions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    transaction: Annotated[float, Field(strict=True, ge=0, le=1)] | None
+    customer: Annotated[float, Field(strict=True, ge=0, le=1)] | None
+    account: Annotated[float, Field(strict=True, ge=0, le=1)] | None
+    behavioral: Annotated[float, Field(strict=True, ge=0, le=1)] | None
+    network: Annotated[float, Field(strict=True, ge=0, le=1)] | None
+
+
 class RiskExplanation(BaseModel):
     model_config = ConfigDict(extra="forbid")
     findings: list[Finding] = Field(max_length=8)
     counter_evidence: list[Finding] = Field(max_length=5)
     limitations: list[str] = Field(max_length=8)
+    advisory_dimensions: AdvisoryDimensions | None = None
+
+
+class SecondaryTypology(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    typology: Literal["STRUCTURING", "LAYERING", "SANCTIONS_EXPOSURE", "POTENTIAL_IDENTITY_MISUSE", "PEP_REVIEW", "OTHER"]
+    rationale: Finding
 
 
 class Categorization(BaseModel):
@@ -101,6 +118,7 @@ class Categorization(BaseModel):
     suggested_action: Literal["ESCALATE", "REVIEW", "MONITOR", "CLOSE"]
     rationale: Finding
     uncertainty: Literal["LOW", "MEDIUM", "HIGH"]
+    secondary_typologies: list[SecondaryTypology] = Field(default_factory=list, max_length=3)
 
 
 class Investigation(BaseModel):
@@ -111,11 +129,35 @@ class Investigation(BaseModel):
     missing_information: list[str] = Field(max_length=8)
     next_steps: list[str] = Field(max_length=8)
     limitations: list[str] = Field(max_length=8)
+    confidence: Literal["LOW", "MEDIUM", "HIGH"] | None = None
+    confidence_reason: Finding | None = None
 
 
 class TriageRequest(BaseModel):
+    expected_policy_version: str | None = Field(default=None, pattern=r"^(?:detector-v1|[a-f0-9]{64})$")
+    expected_auto_label_policy_version: str | None = Field(default=None, pattern=r"^(?:auto-label-v1|[a-f0-9]{64})$")
     model_config = ConfigDict(extra="forbid")
     alert_ids: list[Annotated[str, Field(pattern=r"^[a-f0-9]{24}$")]] = Field(min_length=1, max_length=9)
+
+
+class EvolutionFinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    rule_id: Literal["HIGH_VALUE", "CRYPTO", "PEP", "POST_DEATH", "DORMANT", "MULTI_CURRENCY", "CASH_INTENSITY", "FOREIGN_WIRE", "STRUCTURING"]
+    title: str = Field(min_length=1, max_length=120)
+    explanation: str = Field(min_length=1, max_length=800)
+    support_feedback_ids: list[str] = Field(min_length=1, max_length=10)
+    counter_feedback_ids: list[str] = Field(default_factory=list, max_length=10)
+    signal_codes: list[str] = Field(default_factory=list, max_length=10)
+
+
+class EvolutionRecommendation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    rule_id: EvolutionFinding.model_fields["rule_id"].annotation
+    title: str = Field(min_length=1, max_length=120)
+    rationale: str = Field(min_length=1, max_length=800)
+    support_feedback_ids: list[str] = Field(default_factory=list, max_length=10)
+    kind: Literal["DETECTOR_CHANGE", "INFORMATIONAL"]
+    candidate_id: Literal["hv-15000", "hv-20000", "expected-activity"] | None = None
 
 
 class EvolutionAssessment(BaseModel):
@@ -129,11 +171,22 @@ class EvolutionAssessment(BaseModel):
     hypothesis: str | None = Field(default=None, min_length=1, max_length=1500)
     support_feedback_ids: list[str] = Field(default_factory=list, max_length=100)
     limitations: list[str] = Field(max_length=8)
+    report_version: Literal[1, 2] = 1
+    findings: list[EvolutionFinding] = Field(default_factory=list, max_length=5)
+    recommendation_items: list[EvolutionRecommendation] = Field(default_factory=list, max_length=5)
 
 
 class EvolutionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     snapshot_id: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class ReassessmentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_revision: Annotated[StrictInt, Field(ge=0)]
+    expected_policy_version: str = Field(pattern=r"^(auto-label-v1|[a-f0-9]{64})$")
+    notes: str = Field(min_length=1, max_length=2000)
+    cursor: str | None = Field(default=None, pattern=r"^[a-f0-9]{24}$")
 
 
 class CandidateFreezeRequest(BaseModel):
@@ -147,7 +200,7 @@ class CandidateFreezeRequest(BaseModel):
 class RecommendationReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_revision: Annotated[StrictInt, Field(ge=0)]
-    state: Literal["REVIEWED", "REJECTED"]
+    state: Literal["APPROVED", "REJECTED"]
     notes: str = Field(min_length=1, max_length=2000)
 
 
@@ -250,3 +303,16 @@ class UsageDaily(BaseModel):
     credit_verified_until: AwareDatetime | None = None
     revision: Annotated[StrictInt, Field(ge=0)] = 0
     reserved_attempt_ids: list[str] = Field(default_factory=list, max_length=120)
+
+class PolicyChangeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_revision: int = Field(ge=0)
+    expected_policy_revision: int = Field(ge=0)
+    notes: str = Field(min_length=1, max_length=2000)
+
+
+class PatternReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_revision: int = Field(ge=0)
+    status: Literal["ACTIVE", "RESOLVED"]
+    notes: str = Field(min_length=1, max_length=2000)

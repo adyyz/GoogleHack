@@ -107,7 +107,7 @@ Candidate freezing and simulation are separate operator POST actions under `/api
 
 Local Gemini integration is opt-in and uses the Developer API, independently of cloud deployment. With the local emulators running, `scripts/with-gemini-secret.ps1 -Action Api -EnableLocalGemini` starts the API with the pinned key held only in process memory. A separate `scripts/with-gemini-secret.ps1 -Action Worker -EnableLocalGemini` drains at most 100 queued parent jobs once, then exits. These commands access Secret Manager; the worker can make real requests only while today's admin switch is enabled and verification remains valid. Do not include them in automated tests. Further live investigation calls require the agreed bounded test approval.
 
-Opt-in expires after one hour; new UTC days start disabled and local reservations have a hard ceiling of 12 attempts/day. Each alert has three model legs, each allowing at most one confirmed transient retry, plus token pre-count requests. Retry needs explicit short provider RetryInfo without quota details; every sent retry reserves a separate slot. Operators refresh explicitly. A provider timeout remains UNKNOWN_OUTCOME and blocks later legs; the one-shot worker never reclaims unleased RUNNING jobs. Managed delivery resumes sealed work only after its lease expires, with no resend of unknown attempts. Disable today's switch before inspecting recovery. Cloud delivery/deployment remain pending.
+Opt-in expires after one hour; new UTC days start disabled. Local testing uses the configured daily admin limit, up to 120 attempts, without a separate 12-attempt ceiling. Each alert has three model legs, each allowing at most one confirmed transient retry, plus token pre-count requests. Retry needs explicit short provider RetryInfo without quota details; every sent retry reserves a separate slot. Operators refresh explicitly. A provider timeout remains UNKNOWN_OUTCOME and blocks later legs; the one-shot worker never reclaims unleased RUNNING jobs. Managed delivery resumes sealed work only after its lease expires, with no resend of unknown attempts. Disable today's switch before inspecting recovery. Cloud delivery/deployment remain pending.
 
 After local setup, interactive account sign-in and verification of a real credited project are still needed. Do not run initialization that creates/selects projects by guesswork.
 
@@ -147,3 +147,5 @@ The future target is `genesis-aicb` (project number `638299117256`). Credit bala
 - No real Firebase project selected, cloud resources created, billing upgraded or live model calls made.
 - Codex must load the Genesis workspace configuration before its MCP tools are available in a new session.
 - Account sign-in and credit verification remain prerequisites for live Google Cloud work.
+
+See [Evolution rule intelligence](docs/evolution-rule-intelligence.md) for Discovery access, separate advisory scores, aggregate publication and evidence-gated A0 learning.

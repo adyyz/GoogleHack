@@ -4,10 +4,10 @@ import json
 from time import monotonic, sleep
 
 from .dataset import DATASET_ID, content_hash, stable_id
-from .engine import WEIGHTS, enrich, prioritize, risk_assessment
+from .engine import AUTO_LABEL_VERSION, WEIGHTS, auto_label, enrich, prioritize, risk_assessment
 from .gateway import GatewayResult, generate_json
 from .models import StepRun, retry_allowed
-from .prompts import CONTEXT_POLICY, LEGS, context_for
+from .prompts import CONTEXT_POLICY, LEGS, context_for, evolution_prompt_context
 from .repository import Conflict, Repository, now
 
 
@@ -40,7 +40,7 @@ def triage_leg(repo, child, step, evidence, risk, previous):
     text = prompt["body"]["instructions"] + "\nSOURCE_DATA:\n" + json.dumps(selected, sort_keys=True, separators=(",", ":"))
     step = step.model_copy(update={"prompt_version_id": prompt["id"], "context_version_id": context["id"],
         "risk_version_id": policy["id"], "model_id": target_model})
-    return generate_json(repo, step, text, schema, input_limit=input_cap, output_limit=profile.max_output_tokens or output_cap, evidence=evidence,
+    return generate_json(repo, step, text, schema, input_limit=input_cap, output_limit=profile.max_output_tokens or output_cap, evidence={**evidence, "intelligence_version": 2},
                          model_id=target_model, thinking_level=profile.thinking_level, temperature=profile.temperature)
 
 
@@ -148,6 +148,20 @@ def _child(repo, child, data, lease=None):
         previous_id = sealed["id"]
     _update(repo, ident, {"stage": "A0"}, lease)
     priority = prioritize(evidence, risk, previous["A3"]["suggested_action"])
+    bundle = repo.get("config_versions", child["config_bundle_id"])
+    if bundle.get("body", {}).get("auto_label_version") == AUTO_LABEL_VERSION:
+        from .calibration import cohort, BASELINE
+        version = bundle["body"].get("auto_label_policy_version", BASELINE)
+        thresholds = None
+        if version != BASELINE:
+            policy = repo.get("config_versions", version)
+            if not policy or content_hash(policy["body"]) != version: return "A0_POLICY_INTEGRITY_FAILED"
+            selected = policy["body"]["rules"][repo.get("alerts", child["alert_id"])["rule_id"]]
+            if selected.get("cohort") == cohort(bundle): thresholds = selected
+        priority.update(auto_label(evidence, previous["A3"], thresholds, version))
+        if "auto_label_policy_version" in bundle["body"]:
+            priority.update(thresholds=thresholds or {"tp": .25, "fp": .65},
+                threshold_source="LEARNED" if thresholds else "BASELINE_FALLBACK", cohort=cohort(bundle))
     a0 = StepRun(id=stable_id(ident, "A0", 1), **base, leg_id="A0", state="SUCCEEDED", worker_lease=lease,
         started_at=now(), finished_at=now(), output=priority, parent_step_ids=[previous_id],
         validation={"schema_pass": True, "evidence_pass": True})
@@ -224,8 +238,9 @@ def _evolution_leg(repo, run, step, context):
     if repo.settings.mode == "cloud" and (bundle_body.get("provider") != "GOOGLE_CLOUD"
         or bundle_body.get("location") != repo.settings.verified_cloud_location): return GatewayResult(error_code="CONFIG_MISMATCH")
     step = step.model_copy(update={"prompt_version_id": prompt["id"], "selected_evidence_ids": context["evidence_ids"], "model_id": target_model})
-    text = instructions + "\nFROZEN_INPUTS:\n" + json.dumps(context, sort_keys=True, default=str, separators=(",", ":"))
-    return generate_json(repo, step, text, schema, input_limit=input_cap, output_limit=profile.max_output_tokens or output_cap, evidence=context,
+    selected = evolution_prompt_context(context)
+    text = instructions + "\nFROZEN_INPUTS:\n" + json.dumps(selected, sort_keys=True, default=str, separators=(",", ":"))
+    return generate_json(repo, step, text, schema, input_limit=input_cap, output_limit=profile.max_output_tokens or output_cap, evidence={**context, "human_feedback": selected.get("human_feedback", []), "intelligence_version": 2},
                          model_id=target_model, thinking_level=profile.thinking_level, temperature=profile.temperature)
 
 

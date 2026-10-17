@@ -9,15 +9,15 @@ from .models import Split
 from .repository import Repository, now
 
 
-def public_cases(data):
+def public_cases(data, split=Split.DEMO):
     cases = []
     for case in data.cases.values():
-        if case.split != Split.DEMO: continue
+        if case.split != split: continue
         evidence = enrich(data, case)
         risk = risk_assessment(evidence)
         hint = prioritize(evidence, risk, None)
         cases.append({"id": case.id, "name": data.customers[case.customer_id].display_name,
-            "scenario_family": case.scenario_family, "split": "DEMO", "alerts": detect(data, case),
+            "scenario_family": case.scenario_family, "split": split.value, "alerts": detect(data, case),
             "evidence": evidence, "risk": risk, "ai_status": "NOT_RUN",
             "queue_priority": hint["priority"], "queue_reason": hint["reason"]})
     return cases
