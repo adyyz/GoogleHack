@@ -69,6 +69,10 @@ The portable tools installer verifies archive SHA256 checksums. Tools, download 
 
 ## Local Firebase
 
+Run regression browser journeys against an owned, closed-AI test environment, rather than an operator's active preview. The browser runner accepts `GENESIS_BROWSER_BASE_URL` for a separate loopback API; integration tests accept explicit loopback Auth/Firestore ports. This allows fresh test data without overwriting genuine local investigation/review evidence.
+
+The npm override pins `@grpc/grpc-js` to `1.14.6`, already used by the pinned Firebase CLI. This replaces the Firebase umbrella package's old transitive Firestore pin affected by [the upstream certificate-authentication advisory](https://github.com/grpc/grpc-node/security/advisories/GHSA-m9gg-hp2v-232j). App code imports Firebase app/auth only; final Python images receive compiled browser assets, not node_modules. The override can be removed when the pinned Firebase release resolves to a patched version itself. Production npm findings and development-tool/image findings are recorded separately in the evaluation record.
+
 ```powershell
 npm run emulators
 ```
