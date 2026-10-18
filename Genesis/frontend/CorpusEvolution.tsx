@@ -4,6 +4,7 @@ import { A0Learning } from './A0Learning';
 import { Dialog } from './Dialog';
 import { ReviewOverview } from './ReviewOverview';
 import { RuleIntelligence } from './RuleIntelligence';
+import { useCorpusSummary } from './useCorpusSummary';
 import type { AnalyticalSnapshot, EvolutionDetail, EvolutionRun, Page } from './types';
 
 const base = '/api/operator/bulk/evolution';
@@ -27,6 +28,7 @@ export function CorpusEvolution({ discardVersion, token, selectedRule, onSelectR
   const [patterns, setPatterns] = useState<Page<Pattern>>({ items: [], next_cursor: null });
   const [observed, setObserved] = useState<{items: Observation[]; next_cursor: string | null; active_policy: {policy_version_id: string; revision: number}} | null>(null);
   const [version, setVersion] = useState(0), [discard, setDiscard] = useState(0), [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [reportLoading, setReportLoading] = useState(false);
+  const summary = useCorpusSummary(onError, version);
   const [error, setError] = useState(''), [message, setMessage] = useState(''), [confirm, setConfirm] = useState(false);
   const [learningDirty, setLearningDirty] = useState(false), [publicationDirty, setPublicationDirty] = useState(false);
   const lifetime = useRef(new AbortController());
@@ -76,10 +78,10 @@ export function CorpusEvolution({ discardVersion, token, selectedRule, onSelectR
     });
   }
   return <div className="corpus-evolution">
-    <div className="panel evo-scope"><div><span className="eyebrow">GENUINE CORPUS LEARNING</span><h2>From analyst decisions to safer pre-labels.</h2><p>40,000 source cases · 20,000 operational cases. Only genuine frozen reviews inform this journey. Scores and detectors stay fixed.</p></div><button className="secondary" disabled={loading || busy} onClick={() => setVersion(value => value + 1)}>Refresh corpus Evolution</button></div>
+    <div className="panel evo-scope"><div><span className="eyebrow">GENUINE CORPUS LEARNING</span><h2>From analyst decisions to safer pre-labels.</h2><p>{summary?.cases.toLocaleString() ?? 'Loading'} source cases · {summary?.initially_unprocessed.toLocaleString() ?? 'Loading'} {summary?.scope === 'ACTIVE_BASELINE' ? 'reserved cases' : 'operational cases'}. Only genuine frozen reviews inform this journey. Scores and detectors stay fixed.</p></div><button className="secondary" disabled={loading || busy} onClick={() => setVersion(value => value + 1)}>Refresh corpus Evolution</button></div>
     <nav className="evo-jumps" aria-label="Evolution stages">{stages.map(([id, emoji, label], index) => <button type="button" className="secondary" key={id} onClick={() => { const target = document.getElementById('evo-' + id); target?.scrollIntoView({block: 'start'}); target?.querySelector<HTMLElement>('h2')?.focus({preventScroll: true}); }}><span aria-hidden="true">{emoji} </span>{index + 1}. {label}</button>)}</nav>
     {loading && <p role="status">Loading corpus Evolution…</p>}{error && <p role="status" className="error">{error}</p>}{message && <p role="status">{message}</p>}
-    <Stage name="outcomes"><ReviewOverview key={version} token={token} endpoint={base + '/review-summary'} onError={onError} /><p className="evo-stage-note">Learning needs 30 conclusive reviews overall, 15 eligible scored reviews per rule and at least two TP and two FP identities. Learn shows the exact eligible counts; synthetic references never fill these gates.</p></Stage>
+    <Stage name="outcomes"><ReviewOverview key={version} token={token} endpoint={base + '/review-summary'} onError={onError} /><p className="evo-stage-note">Learning needs 30 conclusive reviews overall, 15 eligible scored reviews per rule and at least two TP and two FP identities. Learn shows the exact eligible counts; synthetic references and simulated analyst projections never fill these gates.</p></Stage>
     <RuleIntelligence apiBase={base} discardVersion={discard} version={version} token={token} detail={report} selectedRule={selectedRule} onSelectRule={onSelectRule} onOpenCase={onOpenCase} onDirty={setPublicationDirty} navigate={navigate} onError={onError} renderLayout={parts => <>
       <Stage name="understand">{parts.matrix}
         <div className="panel"><h2>Genuine corpus A5 reports</h2><p>Current outcomes above are live reads. Each report below describes its own frozen review sample.</p><div className="form-field"><label htmlFor="corpus-report">Stored genuine bulk A5</label><select id="corpus-report" value={runId} disabled={loading || busy} onChange={event => { const value = event.target.value; navigate(() => setRunId(value)); }}><option value="">No report selected</option>{runs.items.map(run => <option key={run.id} value={run.id}>{words(run.state)} / {run.id.slice(0, 8)}</option>)}</select></div>{runs.next_cursor && <button className="secondary" disabled={busy} onClick={() => void more('runs')}>Load more corpus reports</button>}{reportLoading && <p role="status">Loading frozen report…</p>}</div>{parts.report}

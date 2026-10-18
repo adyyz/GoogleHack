@@ -11,9 +11,9 @@
     "build": "tsc --noEmit && vite build",
     "test:browser": "node scripts/check-browser.cjs",
     "browser:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-browser.ps1",
-    "api": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m uvicorn backend.api:app --host 127.0.0.1 --port 8080",
-    "seed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m backend.seed",
-    "test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m pytest -q",
+    "api": "node scripts/python.cjs -m uvicorn backend.api:app --host 127.0.0.1 --port 8080",
+    "seed": "node scripts/python.cjs -m backend.seed",
+    "test": "node scripts/python.cjs -m pytest -q",
     "test:integration": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-local.ps1",
     "doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1",
     "python:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-python.ps1",
@@ -24,8 +24,8 @@
     "gcloud": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/gcloud.ps1",
     "emulators": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1 emulators:start --only auth,firestore --project demo-aml-insight",
     "emulators:check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1 emulators:exec --only auth,firestore --project demo-aml-insight \"node scripts/check-emulators.cjs\"",
-    "bulk:generate": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m backend.bulk_dataset",
-    "bulk:import": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m backend.bulk_jobs --import-local",
+    "bulk:generate": "node scripts/python.cjs -m backend.bulk_dataset",
+    "bulk:import": "node scripts/python.cjs -m backend.bulk_jobs --import-local",
     "test:browser:isolated": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-local.ps1 -Browser"
   },
   "devDependencies": {

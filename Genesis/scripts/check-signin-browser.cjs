@@ -35,8 +35,8 @@ module.exports = async function checkSignIn(browser, baseUrl = 'http://127.0.0.1
     configFailure = false;
     await page.getByRole('button', { name: 'Retry sign-in setup' }).click();
     await page.getByText('Operator sign-in is not configured. Contact the administrator.', { exact: true }).waitFor();
-    await expect(page.getByLabel('Email', { exact: true })).toHaveCount(0);
-    await expect(page.getByLabel('Password', { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Email', { exact: true })).toBeDisabled();
+    await expect(page.getByLabel('Password', { exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Continue with Google', exact: true })).toBeDisabled();
     assert.equal(providerRequests, 0);
     config = { ...config, firebase_web_api_key: 'public-firebase-test-configuration' };
@@ -62,13 +62,13 @@ module.exports = async function checkSignIn(browser, baseUrl = 'http://127.0.0.1
     await expect(trigger).toBeFocused();
     slowConfig = true;
     await trigger.click();
-    await expect(page.getByRole('dialog').locator('button[aria-busy=true]')).toBeDisabled();
+    await expect(page.getByRole('dialog').locator('button[aria-busy=true]').first()).toBeDisabled();
     await expect.poll(() => !!releaseConfig).toBe(true);
     await page.keyboard.press('Escape');
     releaseConfig();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(trigger).toBeFocused();
     assert.equal(sessionCalls, 0);
-    console.log('Google sign-in preparation passed: offline/missing setup, Google-only cloud UI, intercepted SDK network refusal, keyboard/focus, mobile, no persisted token and cancelled setup. No Google session established.');
+    console.log('Google sign-in preparation passed: offline/missing setup, cloud password form, intercepted SDK network refusal, keyboard/focus, mobile, no persisted token and cancelled setup. No Google session established.');
   } finally { await context.close(); }
 };

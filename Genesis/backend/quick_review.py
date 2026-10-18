@@ -69,7 +69,7 @@ def reply_schema(cases):
     return Reply
 
 
-def run(repo, *, cases, baseline_id):
+def run(repo, *, cases, baseline_id, resume_id=None):
     if repo.settings.mode != 'local' or not repo.settings.local_gemini_valid():
         raise Conflict('Verified local Gemini Free Tier access is required')
     if repo.dataset_id != SEEDED_ID: raise Conflict('Seeded practice scope required')
@@ -98,12 +98,28 @@ def run(repo, *, cases, baseline_id):
     bundle_id = content_hash(body)
     run_id = stable_id(SEEDED_ID, METHOD, bundle_id)
     existing = repo.get('pipeline_runs', run_id)
-    if existing: return {'run_id': run_id, 'state': existing['state'], 'reused': True}
+    resumed_from = None
+    if existing:
+        previous = repo.get('step_runs', stable_id(run_id, 'EVALUATE', 1)) or {}
+        known_refusal = (existing['state'] == 'FAILED' and existing.get('error_code') == 'PROVIDER_HTTP_429'
+            and previous.get('state') == 'FAILED' and previous.get('error_code') == 'PROVIDER_HTTP_429'
+            and previous.get('execution_provenance') == 'REAL_PROVIDER' and previous.get('finished_at')
+            and previous.get('output') is None)
+        if not resume_id or not known_refusal:
+            return {'run_id': run_id, 'state': existing['state'], 'error_code': existing.get('error_code'), 'reused': True}
+        resumed_from = run_id
+        # One explicit resume per refused request; a later unknown result cannot be sent again.
+        run_id = stable_id(run_id, 'operator-resume')
+        repeated = repo.get('pipeline_runs', run_id)
+        if repeated: return {'run_id': run_id, 'state': repeated['state'], 'error_code': repeated.get('error_code'), 'reused': True}
     daily = repo.daily_control()
     if daily['live_enabled']: raise Conflict('Stop the other local worker before quick review')
-    repo.create('config_versions', bundle_id, {'kind': 'BUNDLE', 'origin': 'BASELINE', 'body': body, 'content_hash': bundle_id})
+    bundle = repo.get('config_versions', bundle_id)
+    if bundle and (bundle.get('body') != body or bundle.get('content_hash') != bundle_id): raise Conflict('Review configuration integrity failed')
+    if not bundle: repo.create('config_versions', bundle_id, {'kind': 'BUNDLE', 'origin': 'BASELINE', 'body': body, 'content_hash': bundle_id})
     repo.create('pipeline_runs', run_id, PipelineRun(id=run_id, dataset_id=SEEDED_ID, kind='EVALUATION',
         state='RUNNING', config_bundle_id=bundle_id, actor_uid='operator-demo', started_at=now()).model_dump())
+    if resumed_from: repo.audit('SEEDED_QUICK_REVIEW_OPERATOR_RESUME', 'pipeline_runs', run_id, 'operator-demo', previous_run_id=resumed_from)
     step = StepRun(id=stable_id(run_id, 'EVALUATE', 1), dataset_id=SEEDED_ID, run_id=run_id,
         leg_id='EVALUATE', config_bundle_id=bundle_id, state='STARTED', started_at=now(),
         input_hash=content_hash(prompt), model_id=repo.settings.active_model_id,

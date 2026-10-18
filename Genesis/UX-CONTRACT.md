@@ -1,5 +1,17 @@
 # AML Insight UI contract
 
+## Code-improvement queue
+
+Rule-matrix Outcomes has an explicit native outcome-source selector. A prepared analyst projection is the initial active-baseline view; original reference outcomes and genuine human outcomes remain separate choices. Headers, counts, agreement denominators and scope warnings change together. Missing data remains unavailable/loading, never zero. Generated case assignments are visibly simulated and do not populate genuine learning gates. Selection and Configuration stay synchronized; source changes reuse the dirty-form guard. Projected cutoff exploration is read-only, training-only and has no Apply action.
+
+All main workspace counts and rows share the active Firestore baseline ID. Advisory completion never marks full triage or human review complete. Reserved reference labels stay hidden; old corpus review totals and policies must not leak into the active baseline. Missing serving data fails visibly rather than restoring the old corpus. The reference/advisory scope refuses genuine execution until that workflow is enabled for it.
+
+Agent-drafted advisory reviews have their own counter and provenance. The unfilled-advisory count includes both sources; it never claims drafts are genuine Gemini calls, human verdicts or learning eligibility. Imports preserve genuine records and exclude reserved cases.
+
+Cloud sign-in offers Google and manual email/password independently. Password setup remains usable if Google setup fails; local fixtures never prefill cloud credentials. The stored-login button is present only when explicitly enabled private-staging configuration exposes an email. It never fills or returns a password. All paths validate the operator session and retain tokens only in memory. Closing the dialog cancels late completions. Private staging must remove this shortcut before public release.
+
+State-column badge/action spacing belongs to an inner wrapping group, preserving native table cells. Category nowrap rules have a catalog-specific width owner. Corpus captions use abortable public-summary reads and loading states; fixture constants and detector thresholds remain fixed. Identity type remains in filters/details while redundant row subtext is removed.
+
 ## Seeded history practice
 
 An active practice baseline can restrict work to 2,000 preprocessing cases while reserving 1,000 from different identities. Show the active allocation and actual Gemini advisory count first. Preserved 10,000-case history and earlier full investigations have separate labels. Never present an advisory review as a full investigation, analyst verdict or qualifying genuine calibration observation. Reserved cases are excluded server-side from both preprocessing workers.

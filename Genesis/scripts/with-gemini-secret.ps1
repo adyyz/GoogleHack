@@ -5,6 +5,7 @@ param(
     [switch]$EnableLocalGemini,
     [ValidateSet('gemini-3.5-flash-lite','gemini-3-flash-preview')][string]$LocalModel = 'gemini-3.5-flash-lite',
     [ValidateRange(0,10000)][int]$HistoryCases = 0,
+    [switch]$ResumeRefused,
     [switch]$Watch
 )
 $ErrorActionPreference = 'Stop'
@@ -41,7 +42,8 @@ try {
         & (Join-Path $PSScriptRoot 'python.ps1') -m backend.gemini_smoke
     } elseif ($Action -eq 'BaselineReview') {
         $env:LOCAL_GEMINI_MIN_INTERVAL_SECONDS = '5'
-        & (Join-Path $PSScriptRoot 'python.ps1') -m backend.seeded_baseline run
+        if ($ResumeRefused) { & (Join-Path $PSScriptRoot 'python.ps1') -m backend.seeded_baseline run --resume-refused }
+        else { & (Join-Path $PSScriptRoot 'python.ps1') -m backend.seeded_baseline run }
     } elseif ($Action -eq 'History') {
         $env:LOCAL_GEMINI_MIN_INTERVAL_SECONDS = '5'
         & (Join-Path $PSScriptRoot 'python.ps1') -m backend.seeded_history run --max-cases $HistoryCases

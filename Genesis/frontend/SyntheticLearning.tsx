@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { request } from './api';
 import { Dialog } from './Dialog';
 import { SeededHistory } from './SeededHistory';
+import { useCorpusSummary } from './useCorpusSummary';
 
 type Cutoffs = { tp: number; fp: number };
 type Comparison = { cases: number; before: Record<string, number>; after: Record<string, number>; baseline_cutoffs: Cutoffs; applied_cutoffs: Cutoffs };
@@ -16,6 +17,7 @@ export function SyntheticLearning({ token, onError, navigate }: { token: string;
   const [scope, setScope] = useState('exercise'), [history, setHistory] = useState<Learning[]>([]);
   const [record, setRecord] = useState<Learning | null>(null), [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false), [version, setVersion] = useState(0), [confirmation, setConfirmation] = useState(''), [message, setMessage] = useState('');
+  const summary = useCorpusSummary(onError, version);
   const owner = useRef({ token, scope }); owner.current = { token, scope };
   const lifetime = useRef(new AbortController()); useEffect(() => () => lifetime.current.abort(), []);
   const exercise = scope === 'exercise';
@@ -55,8 +57,8 @@ export function SyntheticLearning({ token, onError, navigate }: { token: string;
   return <><SeededHistory token={token} onError={onError} /><section className="panel synthetic-learning" aria-label="Cutoff learning and controlled exercise">
     <div className="panel-heading"><h2><span aria-hidden="true">🧬 </span>Cutoff learning</h2><span className="badge neutral">Python calibration · zero model calls</span></div>
     <p>Risk weights and heuristic coefficients stay fixed. Only AUTO_TP / AUTO_FP boundaries are tested; approval and application are separate actions.</p>
-    <div className="learning-controls"><div className="form-field"><label htmlFor="learning-dataset">Learning dataset</label><select id="learning-dataset" disabled={busy} value={scope} onChange={e => { const value = e.target.value; navigate(() => setScope(value)); }}><option value="exercise">Controlled exercise / isolated fixture</option><option value="corpus">Existing corpus / 16,000 training references</option></select></div><button className="secondary" disabled={busy || loading} onClick={() => setVersion(v => v + 1)}><span aria-hidden="true">↻ </span>Refresh learning</button></div>
-    <div className="learning-scope"><strong>{exercise ? 'Controlled fixture—not a measured corpus improvement.' : 'Synthetic reference learning—not human feedback.'}</strong><p>{exercise ? '40 training, 20 independent validation and 100 later test cases. Deliberately separable scores exercise the real calibration and application code in separate local collections. No genuine policies, reviews or investigations change.' : 'Uses the existing 16,000 training references, including the 10,000 displayed walkthrough cases. The separate validation cohort is opened once after candidate freeze. Historical results are retained.'}</p></div>
+    <div className="learning-controls"><div className="form-field"><label htmlFor="learning-dataset">Learning dataset</label><select id="learning-dataset" disabled={busy} value={scope} onChange={e => { const value = e.target.value; navigate(() => setScope(value)); }}><option value="exercise">Controlled exercise / isolated fixture</option><option value="corpus">Existing corpus / {summary?.training_transactions.toLocaleString() ?? 'Loading'} training references</option></select></div><button className="secondary" disabled={busy || loading} onClick={() => setVersion(v => v + 1)}><span aria-hidden="true">↻ </span>Refresh learning</button></div>
+    <div className="learning-scope"><strong>{exercise ? 'Controlled fixture—not a measured corpus improvement.' : 'Synthetic reference learning—not human feedback.'}</strong><p>{exercise ? '40 training, 20 independent validation and 100 later test cases. Deliberately separable scores exercise the real calibration and application code in separate local collections. No genuine policies, reviews or investigations change.' : <>Uses the active {summary?.training_transactions.toLocaleString() ?? 'Loading'} training references, including the {summary?.reference_walkthrough_cases.toLocaleString() ?? 'Loading'} displayed walkthrough cases. {summary?.scope === 'ACTIVE_BASELINE' ? 'Reserved cases remain unopened; independent validation is not available in this baseline.' : 'The separate validation cohort is opened once after candidate freeze. Historical results are retained.'}</>}</p></div>
     <ol className="learning-steps" aria-label="Cutoff exercise steps">{['Prepare', 'Validate', 'Approve', 'Apply', 'Compare 100'].slice(0, exercise ? 5 : 4).map((step, i) => <li key={step}><span aria-hidden="true">{i + 1}</span>{step}</li>)}</ol>
     {loading ? <p role="status">Loading learning records…</p> : failed ? <p role="status">Learning records unavailable. Use Refresh learning to retry.</p> : <>
       <div className="learning-actions"><button className="primary" disabled={busy || exercise && !!record} onClick={() => setConfirmation('prepare')}><span aria-hidden="true">🧬 </span>{exercise ? 'Prepare exercise candidate' : 'Prepare synthetic candidates'}</button></div>

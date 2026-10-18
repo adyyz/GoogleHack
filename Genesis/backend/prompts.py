@@ -10,9 +10,9 @@ LEG_CAPABILITIES = {
     "A5": AgentCapability.META_EVOLUTION,
 }
 
-CONTEXT_POLICY = {"version": "leg-context-v5", "reference_labels_allowed": False,
+CONTEXT_POLICY = {"version": "leg-context-v6", "reference_labels_allowed": False,
     "evolution": "omit opaque ledger reference arrays from model input; retain full immutable snapshot and validate references server-side",
-    "chronology": "all transactions in the prior 30 days; most recent historical transaction when that window is empty",
+    "chronology": "at most eight prior-30-day transactions, preserving up to three qualifying protected structuring deposits before filling with the latest history; latest historical transaction when the window is empty; full aggregates/signals preserved and omissions explicit",
     "citation_registry": "customer, account, trigger and selected chronology IDs only; aggregate facts remain complete",
     "A3": "deterministic facts, protected/missing signals and code-owned risk; separately labeled A2 advisory dimensions and one finding/counter-finding",
     "A4": "full deterministic facts and selected source chronology; at most one A2 finding/counter-finding (600 chars, 3 citations each), one limitation (300 chars), and A3 classification with rationale under the same finding bounds; omitted counts are explicit"}
@@ -135,9 +135,22 @@ def context_for(leg, evidence, risk, previous):
             "A3_rationale_omitted": bool(classification.get("rationale") and not rationale),
             "note": "Full prior outputs remain in the private ledger. Ground this brief in the supplied source facts and chronology."}
     if leg != "A3":
-        cutoff = datetime.fromisoformat(evidence["trigger"]["occurred_at"]) - timedelta(days=30)
+        at = datetime.fromisoformat(evidence["trigger"]["occurred_at"])
+        cutoff = at - timedelta(days=30)
         selected = [transaction for transaction in evidence["history"] if datetime.fromisoformat(transaction["occurred_at"]) > cutoff]
         if not selected and evidence["history"]: selected = evidence["history"][-1:]
+        available = len(selected)
+        protected = [transaction for transaction in selected if "STRUCTURING" in evidence["protected_signals"]
+            and transaction["type"] == "CASH" and transaction["direction"] == "CREDIT"
+            and datetime.fromisoformat(transaction["occurred_at"]) >= at - timedelta(hours=72)
+            and 800_000 <= transaction["amount_aud_minor"] < 1_000_000][-3:]
+        chosen = {transaction["id"] for transaction in protected}
+        for transaction in reversed(selected):
+            if len(chosen) >= 8: break
+            chosen.add(transaction["id"])
+        selected = [transaction for transaction in selected if transaction["id"] in chosen]
+        context["chronology_selection"] = {"available": available, "included": len(selected), "omitted": available - len(selected),
+            "note": "Selected history only; full deterministic aggregates and protected signals are unchanged. Full source history remains available to the analyst."}
         context["chronology"] = [{key: transaction[key] for key in ("id", "occurred_at", "amount_aud_minor", "currency", "direction", "type", "counterparty_id", "counterparty_sanctions_flag")} for transaction in selected]
     # Old history IDs add tokens without supplying their transactions. Keep the
     # full facts and selected chronology, with exactly their source identifiers.

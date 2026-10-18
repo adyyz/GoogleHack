@@ -201,6 +201,9 @@ def test_seed_publication_auth_and_persistence():
     with TestClient(app) as client:
         assert client.get("/api/health").json()["live_ai_enabled"] is False
         assert client.get("/api/config").json()["firebase_web_api_key"] is None
+        assert "operator_password" not in client.get("/api/config").json()
+        assert "operator_demo_email" not in client.get("/api/config").json()
+        assert client.post('/api/operator/demo-login').status_code == 404
         cases = repo.publication()["public_cases"]
         for path in ["/api/demo/dashboard", "/api/demo/alerts", "/api/demo/manifest", "/api/operator/cases", "/api/operator/queue-summary", "/api/operator/evaluation", "/api/operator/evolution/rule-matrix"]:
             assert client.get(path).status_code == 404
@@ -212,7 +215,9 @@ def test_seed_publication_auth_and_persistence():
             target = re.sub(r"\{[^}]+\}", "0" * 24, path)
             for identity in [{}, {"Authorization": "Bearer invalid"}]:
                 denied = client.request(method, target, headers=identity, json={} if method != "GET" else None)
-                assert denied.status_code == 401, (method, path)
+                # The staging sign-in entry is deliberately absent in local mode.
+                expected_status = 404 if path == '/api/operator/demo-login' else 401
+                assert denied.status_code == expected_status, (method, path)
                 assert denied.headers["cache-control"] == "no-store"
         assert client.get("/api/operator/evaluation", headers={"Authorization": "Bearer invalid"}).status_code == 404
 
@@ -267,7 +272,8 @@ def test_seed_publication_auth_and_persistence():
         unauthorized = {"Authorization": "Bearer " + signup.json()["idToken"]}
         for method, path in private_routes:
             target = re.sub(r"\{[^}]+\}", "0" * 24, path)
-            assert client.request(method, target, headers=unauthorized, json={} if method != "GET" else None).status_code == 403, (method, path)
+            expected_status = 404 if path == '/api/operator/demo-login' else 403
+            assert client.request(method, target, headers=unauthorized, json={} if method != "GET" else None).status_code == expected_status, (method, path)
         # Admin membership cannot grant access without operator membership.
         with TestClient(create_app(replace(Settings.load(), operator_uids=frozenset(), admin_uids=frozenset({"operator-demo"})))) as admin_only:
             assert admin_only.get("/api/operator/session", headers=headers).status_code == 403

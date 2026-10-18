@@ -86,6 +86,7 @@ def _model_attempt(repo, step, call, lease=None):
         if row is None:
             row = _create_step(repo, step.model_copy(update={"state": "FAILED", "finished_at": now(),
                 "model_id": None, "usage_status": "NOT_APPLICABLE", "cost_status": "NOT_APPLICABLE",
+                "context_precount_tokens": result.context_precount_tokens,
                 "execution_provenance": "NOT_SENT", "error_code": result.error_code or "UNSEALED_PROVIDER_RESULT"}), lease)
     return row
 
@@ -215,10 +216,14 @@ def worker_once(repo):
     if not repo.settings.local_gemini_enabled: raise RuntimeError("Opt in to local Gemini before starting this worker")
     from .bulk_jobs import advance, scoped
     from .bulk_dataset import ID as BULK_ID
-    for job in repo.page("bulk_jobs", 50, filters=[("state", "QUEUED"), ("dataset_id", BULK_ID)])["items"]: advance(repo, job["id"])
-    bulk_runs = repo.page("pipeline_runs", 100, filters=[("kind", "TRIAGE_BATCH"), ("state", "QUEUED"), ("dataset_id", BULK_ID)])
+    from .baseline_workspace import selected_id
+    dataset_id = selected_id(repo) or BULK_ID
+    for job in repo.page("bulk_jobs", 50, filters=[("state", "QUEUED"), ("dataset_id", dataset_id)])["items"]: advance(repo, job["id"])
+    bulk_runs = repo.page("pipeline_runs", 100, filters=[("kind", "TRIAGE_BATCH"), ("state", "QUEUED"), ("dataset_id", dataset_id)])
     bulk_count = sum(run_local(scoped(repo, run), run["id"]) for run in bulk_runs["items"])
-    bulk_evolution = repo.page("pipeline_runs", 100, filters=[("kind", "EVOLUTION"), ("state", "QUEUED"), ("dataset_id", BULK_ID)])
+    # Seal each parent before advancing its case coordinator again.
+    for job in repo.page("bulk_jobs", 50, filters=[("state", "QUEUED"), ("dataset_id", dataset_id)])["items"]: advance(repo, job["id"])
+    bulk_evolution = repo.page("pipeline_runs", 100, filters=[("kind", "EVOLUTION"), ("state", "QUEUED"), ("dataset_id", dataset_id)])
     bulk_count += sum(run_evolution(scoped(repo, run), run["id"]) for run in bulk_evolution["items"])
     return bulk_count
 

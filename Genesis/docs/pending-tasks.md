@@ -4,7 +4,11 @@ Updated 18 October 2026, Australia/Sydney. This is the current handoff; older re
 
 ## Current position
 
-The local investigation and Evolution workflows are implemented and tested. Genuine Gemini investigations, user-saved analyst reviews and A5 results exist. The active seeded practice dataset is now 3,000 cases, split into 2,000 baseline cases and 1,000 reserved cases. Actual bulk Gemini preprocessing has started but is incomplete. The newest source has not been built, packaged or deployed.
+CI-011/CI-012 add clearly separated matrix sources and a generated analyst projection for the 2,000 advisory cases: 1,500 agree / 400 disagree / 100 uncertainty assignments, balanced across all nine rules. These are simulated labels with separate Firestore collections; genuine human-review counts and operational eligibility remain unchanged. Python cutoff exploration found no supported candidate, so no policy or weight changed. See [projected analyst baseline](projected-analyst-baseline.md).
+
+CI-010 corrected the main UI's data scope: Investigations, Evolution and Admin now read the active Firestore 3,000-case / 200-identity baseline. The 2,000 reference cases have 30 Gemini + 1,970 draft advisories; 1,000 cases remain reserved. Genuine human-review metrics for this scope are zero. Older corpus reviews/reports remain preserved but are excluded from this workspace. Full genuine execution in this reference/advisory scope remains disabled; it must not fall through to the old corpus. See [baseline workspace](baseline-workspace.md).
+
+The local investigation and Evolution workflows are implemented and tested. Genuine Gemini investigations, user-saved analyst reviews and A5 results exist. The active seeded practice dataset is now 3,000 cases, split into 2,000 baseline cases and 1,000 reserved cases. Baseline advisory coverage is complete using 30 preserved genuine Gemini reviews and 1,970 separately labeled agent drafts; genuine Gemini coverage alone remains incomplete. The newest source has not been built, packaged or deployed.
 
 | Evidence or scope | Verified position |
 | --- | --- |
@@ -16,8 +20,9 @@ The local investigation and Evolution workflows are implemented and tested. Genu
 | Active seeded baseline | 3,000 existing synthetic-source cases across all nine rules |
 | Preprocessing allocation | 2,000 cases, 133 identities; 1,015 individual / 985 organization cases |
 | Reserved allocation | 1,000 cases, 67 different identities; 536 individual / 464 organization cases |
-| Actual baseline AI progress | 20 cases / 33 alert opinions stored with successful REAL_PROVIDER attempts |
-| Still awaiting baseline AI review | 1,980 cases; execution stopped on HTTP 429 |
+| Actual baseline AI progress | 30 cases / 50 alert opinions stored with successful REAL_PROVIDER attempts |
+| Agent-drafted advisory reviews | 1,970 cases; LOCAL_AGENT_DRAFT_ADVISORY_NOT_HUMAN; no provider attempts or human reviews |
+| Unfilled advisory cases | Zero; this does not mean all cases were reviewed by Gemini |
 | Reserved Gemini activity | Zero advisory reviews and zero earlier full-investigation attempts in the selected reserve |
 | Historical seeded investigations | Nine completed full Gemini case investigations / ten alerts, separate from bulk advisory reviews |
 | Current genuine A5 evidence | INSUFFICIENT_EVIDENCE: three overall conclusive reviews / two HIGH_VALUE reviews |
@@ -45,24 +50,26 @@ Earlier 10,000-case reference imports remain preserved as historical source reco
 - [x] Select and freeze the 3,000-case baseline with balanced rule strata and disjoint baseline/reserved identities.
 - [x] Implement small multi-case Gemini JSON requests with schema-constrained output, exact alert matching, citation checks, bounded histories and truthful provenance.
 - [x] Commit successful advisory case records atomically with parent completion; exclude reserved cases from preprocessing.
-- [x] Verify the latest code with 137 unit passes and 25 explicit isolated Firebase integration passes. The normal unit command separately skips emulator tests; those skips are not the integration evidence.
+- [x] Verify the latest code with 156 unit passes and 25 explicit isolated Firebase integration passes. The normal unit command separately skips emulator tests; those skips are not the integration evidence.
 - [x] Pass TypeScript, shared design checks and strict design audit; check the active baseline UI at 320, 390, 768 and 1440px with no page errors or operator mutations.
-- [x] Preserve the current local database in an ignored emulator export: `.cache/baseline-3000-20261018`.
+- [x] Preserve the current local database in an ignored emulator export: `.cache/ci003-after-agent-drafts-20261018`.
 
 The existing private staging deployment, Google operator sign-in and an earlier cloud data connection were verified at previous checkpoints. They do not establish that today's local source is deployed or that cloud AI is enabled.
 
-## Pending: finish the requested baseline
+## Baseline advisory coverage
 
-- [ ] **Resume verified Free Tier preprocessing when capacity permits.** Inspect the stored HTTP 429 before retrying. RPM, token and daily quotas are separate; a 15-RPM allowance alone does not prove the request can run.
-- [ ] **Finish 1,980 remaining baseline cases.** Only persisted successful Gemini outputs count. Do not fill failures with random TP/FP labels, synthetic human reviews or fabricated completion flags.
-- [ ] **Keep the 1,000 reserved cases excluded.** Preserve identity separation, source hashes and the original sealed validation partition.
-- [ ] **Review failed/unknown requests explicitly.** Do not automatically repeat unknown outcomes; repeated stored request IDs must not generate duplicate calls or review records.
-- [ ] **Check semantic grounding on completed samples.** Schema and citation ownership checks do not prove the rationale is correct. Check rule interpretation, currency minor units, missing history and protected signals.
-- [ ] **Freeze a completed baseline report.** Report actual processed cases, identities, model/schema versions, per-rule coverage, TP/FP/inconclusive opinions, reference agreement and missing/failed coverage with denominators.
-- [ ] **Keep mixed model cohorts separate for fitting.** The earlier Flash-Lite/Flash comparison does not establish a compatible training cohort or an improvement.
-- [ ] **Run the later reserved-case walkthrough only when requested.** Record before/after behavior without claiming that previously inspected synthetic references are untouched genuine validation.
+- [x] Preserve the 30 genuine Gemini case reviews and their attempt linkage.
+- [x] Validate all supplied draft records against current case membership, source alerts, citations and manual-review flags before writes.
+- [x] Import 1,970 missing drafts with distinct provenance, null provider linkage and no human-feedback claims.
+- [x] Verify repeat import creates zero records; preserve source/configuration/ledger/feedback hashes and all 1,000 reserved cases.
+- [x] Complete local code tasks CI-001 through CI-009; see [canonical ledger](code-improvements.md).
+- [ ] Inspect semantic grounding of the agent opinions before relying on them for a practice report. Structure/citation checks do not prove the analysis is correct.
+- [ ] Freeze a baseline report separating real Gemini/reference and agent-draft/reference comparisons, with exact counts and limitations.
+- [ ] Run the later reserved-case walkthrough only when requested; it is not independently unseen genuine validation.
 
-See [baseline checklist](seeded-baseline.task-list.md) and [scope, commands and provenance](seeded-history.md).
+Further Gemini processing is deferred under the current no-model-call instruction. Draft coverage does not erase the 1,970 cases without actual Gemini reviews. New model execution would require explicit renewed authorization and verified Free Tier capacity. No A5 or human verdict was drafted.
+
+See [baseline checklist](seeded-baseline.task-list.md), [scope/provenance](seeded-history.md), and [private-staging login setup still pending](operator-staging-login.md).
 
 ## Pending: demonstrate genuine learning improvement
 
@@ -78,6 +85,8 @@ See [baseline checklist](seeded-baseline.task-list.md) and [scope, commands and 
 Only A0 cutoffs are adjustable in this main journey. Five Python risk weights, heuristic coefficients, detectors and AI execution stay fixed. Fewer uncertain labels alone does not mean fewer Gemini calls; skipping AI stages would require a separate agreed change.
 
 ## Pending: current-source private cloud integration
+
+CI-006 local code is complete; secret creation, existing Firebase password-user verification, web-only IAM/mounting, the staging enable flag and deployed acceptance remain pending. The shortcut must be disabled and unmounted before public release.
 
 - [ ] Review the complete source diff and update the evaluation record for the final intended scope.
 - [ ] After renewed authorization to build, produce and verify a replacement package. Existing ZIPs/images are historical and predate this source.
@@ -107,8 +116,7 @@ See [submission checklist](../submission/README.md), [deployment/recovery eviden
 
 ## Next order of work
 
-1. Clear the actual Free Tier quota condition and finish the 2,000-case advisory baseline without touching the reserve.
-2. Freeze and inspect the measured baseline report.
-3. Walk through a small genuine investigation/review/Evolution flow together; gather eligible human evidence rather than manufacturing it.
-4. Finish the final-source release checks, then separately authorize and verify private-cloud integration.
-5. Publish the clean repository and submission artifacts after the deployed journey works.
+1. Review the provenance-separated baseline and walk through the intended local UI flow together.
+2. Gather genuine human evidence for supported learning; drafts do not satisfy these gates.
+3. Authorize and verify CI-006 private-staging setup and final-source cloud integration separately.
+4. Complete release/privacy/export checks, then the public repository and submission artifacts after deployed integration works.

@@ -1,6 +1,7 @@
 import os
 import re
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -33,6 +34,21 @@ class Settings:
     verified_rate_card_json: str = ""
     deployed_code_fingerprint: str = ""
     agent_profiles_json: str = ""
+    operator_demo_login: str = field(default="", repr=False)
+    operator_demo_login_enabled: bool = False
+
+    def operator_demo_credentials(self):
+        if self.mode != 'cloud' and (self.operator_demo_login or self.operator_demo_login_enabled):
+            raise ValueError('Stored operator login requires private cloud staging')
+        if not self.operator_demo_login: return None
+        try:
+            value = json.loads(self.operator_demo_login)
+            if (not isinstance(value, dict) or set(value) != {'email', 'password', 'uid'}
+                or any(not isinstance(item, str) or not item.strip() for item in value.values())):
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise ValueError('Invalid stored operator login configuration') from None
+        return value
 
     def worker_configured(self):
         try:
@@ -125,6 +141,9 @@ class Settings:
             firebase_web_api_key=os.getenv("FIREBASE_WEB_API_KEY", "").strip(),
             verified_rate_card_json=os.getenv("VERIFIED_RATE_CARD_JSON", ""), deployed_code_fingerprint=source_fingerprint,
             agent_profiles_json=os.getenv("AGENT_PROFILES_JSON", ""),
-            local_gemini_model=os.getenv("LOCAL_GEMINI_MODEL", "gemini-3.5-flash-lite"))
+            local_gemini_model=os.getenv("LOCAL_GEMINI_MODEL", "gemini-3.5-flash-lite"),
+            operator_demo_login=os.getenv('OPERATOR_DEMO_LOGIN', ''),
+            operator_demo_login_enabled=os.getenv('OPERATOR_DEMO_LOGIN_ENABLED', 'false').lower() == 'true')
         settings.agent_profiles  # Explicit invalid configuration must not silently select defaults.
+        settings.operator_demo_credentials()
         return settings

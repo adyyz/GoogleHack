@@ -23,7 +23,11 @@ def test_baseline_split_is_frozen_disjoint_and_cannot_claim_ai_reviews(repo):
     for start in range(0, len(rows), 400):
         batch = repo.db.batch()
         for row in rows[start:start + 400]:
-            body = {'case_id': row['id'], 'provenance': 'ISOLATED_TEST_FIXTURE_NOT_REAL_EVIDENCE'}
+            body = {'case_id': row['id'], 'provenance': 'ISOLATED_TEST_FIXTURE_NOT_REAL_EVIDENCE',
+                'identity_id': row['identity_id'], 'name': row['name'], 'rules': row['rules'],
+                'reference_heuristic_score': row['reference_score'], 'reference_verdict': row['reference_verdict'],
+                'reference_prediction': row['reference_prediction'], 'python_risk': {'tier': row['risk_tier']},
+                'protected_signals': ['TEST_ONLY'] if row['requires_review'] else [], 'missing_context': []}
             batch.create(repo.db.collection('seeded_case_history').document(stable_id(SEEDED_ID, row['id'])),
                 {'dataset_id': SEEDED_ID, 'case_id': row['id'], 'body': body, 'content_hash': content_hash(body)})
         batch.commit()
@@ -34,6 +38,92 @@ def test_baseline_split_is_frozen_disjoint_and_cannot_claim_ai_reviews(repo):
     assert status['total_cases'] == 3000 and status['pending_ai_reviews'] == 2000
     assert status['reserved_cases'] == 1000 and status['ai_reviewed_cases'] == status['human_reviews'] == 0
     assert not scoped.list('step_runs') and not scoped.list('feedback_events')
+    from scripts.import_agent_drafts import import_drafts
+    imported = import_drafts(scoped, apply=True, allow_equivalent_baseline=True)
+    assert imported['created'] == imported['agent_drafted'] == 2000
+    assert imported['gemini'] == imported['pending'] == 0
+    assert import_drafts(scoped, apply=True, allow_equivalent_baseline=True)['created'] == 0
+    assert not scoped.list('step_runs') and not scoped.list('feedback_events')
+    assert baseline.progress(scoped)['agent_draft_reviewed_cases'] == 2000
+    from backend import baseline_workspace as workspace
+    assert workspace.prepare(scoped)['created'] == 0
+    assert workspace.prepare(scoped, apply=True)['created'] == 9
+    assert workspace.prepare(scoped, apply=True)['created'] == 0
+    active = workspace.view(scoped)
+    assert active['cases'] == 3000 and active['identities'] == 200
+    summary = workspace.summary(workspace.analytics(scoped), active)
+    assert summary['cases'] == 3000 and summary['reference_annotations'] == 2000 and summary['initially_unprocessed'] == 1000
+    assert summary['advisory']['agent_draft_reviewed_cases'] == 2000 and summary['advisory']['pending_ai_reviews'] == 0
+    first_page = workspace.queue(scoped, limit=50)
+    second_page = workspace.queue(scoped, limit=50, cursor=first_page['next_cursor'])
+    assert first_page['total'] == second_page['total'] == 3000
+    assert not {row['id'] for row in first_page['items']} & {row['id'] for row in second_page['items']}
+    assert workspace.queue(scoped, status='reference')['total'] == 2000
+    reserved_page = workspace.queue(scoped, status='awaiting_triage')
+    assert reserved_page['total'] == 1000
+    assert all(not any(key.startswith('reference_') for key in row) for row in reserved_page['items'])
+    filtered = workspace.queue(scoped, identity=rows[0]['identity_id'], customer_type=rows[0]['customer_type'], rule=rows[0]['rules'][0])
+    assert filtered['items'] and all(row['identity_id'] == rows[0]['identity_id'] for row in filtered['items'])
+    assert workspace.queue(scoped, query='not a fictional name')['total'] == 0
+    assert workspace.queue(scoped, status='awaiting_review', private=True)['total'] == 0
+    from backend.rule_intelligence import matrix
+    analytics = workspace.analytics(scoped)
+    assert analytics.review_statistics()['reviewed_alerts'] == 0
+    report = matrix(analytics)
+    assert len(report['rules']) == 9 and sum(row['alert_count'] for row in report['rules']) == sum(summary['rule_alerts'].values())
+    assert workspace.reference_summary(scoped)['cases'] == 2000
+    draft_ref = scoped.db.collection('seeded_advisory_reviews').document(stable_id(first['baseline_id'], training[0]['id']))
+    original_draft = draft_ref.get().to_dict()
+    draft_ref.delete()
+    refreshed = workspace.summary(analytics, active)['advisory']
+    assert refreshed['agent_draft_reviewed_cases'] == 1999 and refreshed['pending_ai_reviews'] == 1
+    draft_ref.create(original_draft)
+    assert workspace.summary(analytics, active)['advisory']['pending_ai_reviews'] == 0
+    from backend import projected_reviews
+    projected = projected_reviews.prepare(scoped, apply=True)
+    assert projected['created'] == 2000 and projected['assignment_counts'] == {'AGREE': 1500, 'DISAGREE': 400, 'UNCERTAIN': 100}
+    assert projected_reviews.prepare(scoped, apply=True)['created'] == 0
+    aggregate = projected_reviews.summary(scoped)
+    assert aggregate['prepared'] and aggregate['cases'] == 2000 and len(aggregate['rules']) == 9
+    assert 'records' not in aggregate and aggregate['human_reviews_created'] == aggregate['model_calls'] == 0
+    assert analytics.review_statistics()['reviewed_alerts'] == 0
+    assert not scoped.list('feedback_events') and not scoped.list('step_runs')
+    # The genuine path uses only a pending case and a new dataset namespace.
+    pending_id = reserved[0]['id']
+    plan = bulk_jobs.preview(scoped, [pending_id], first['baseline_id'], 'TEST_ONLY_operator')
+    assert plan['eligible_cases'] == 1 and plan['dataset_id'] == first['baseline_id']
+    with pytest.raises(Conflict): bulk_jobs.preview(scoped, [training[0]['id']], first['baseline_id'], 'TEST_ONLY_operator')
+    with pytest.raises(Conflict): bulk_jobs.preview(scoped, [pending_id], ID, 'TEST_ONLY_operator')
+    request = Start(case_ids=[pending_id], dataset_id=first['baseline_id'], selection_hash=plan['selection_hash'], idempotency_key='TEST_ONLY_baseline_row')
+    batch = bulk_jobs.create(scoped, request, 'TEST_ONLY_operator')
+    assert bulk_jobs.create(scoped, request, 'TEST_ONLY_operator')['id'] == batch['id']
+    assert workspace.queue(scoped, status='awaiting_triage', private=True)['total'] == 1000
+    queued = next(row for row in workspace.queue(scoped, identity=reserved[0]['identity_id'], private=True)['items'] if row['id'] == pending_id)
+    assert queued['batch_state'] == 'QUEUED' and queued['batch_id'] == batch['id']
+    public = next(row for row in workspace.queue(scoped, identity=reserved[0]['identity_id'])['items'] if row['id'] == pending_id)
+    assert public['batch_state'] is None and 'batch_id' not in public
+    assert 'disabled or expired' in batch['waiting_message'] and not batch['can_resume']
+    assert bulk_jobs.advance(scoped, batch['id'])['state'] == 'PAUSED_CAPACITY'
+    # Explicit isolated refusal exercises the real parent/child path, never a fake provider success.
+    scoped.db.collection('bulk_jobs').document(batch['id']).update({'state': 'QUEUED'})
+    worker, source = bulk_jobs.source(scoped, pending_id, first['baseline_id'])
+    assert all(alert['dataset_id'] == first['baseline_id'] for alert in source['alerts'])
+    parent_id, created = worker.enqueue_triage(batch['members'][0]['alert_ids'], 'TEST_ONLY_operator', plan['detector_policy'], plan['auto_label_policy'], bulk_member=batch['members'][0]['id'])
+    assert created
+    from backend.jobs import run_local
+    assert run_local(worker, parent_id)
+    assert worker.get('pipeline_runs', parent_id)['state'] == 'FAILED'
+    assert bulk_jobs.scoped(scoped, worker.get('pipeline_runs', parent_id)).dataset_id == first['baseline_id']
+    assert all(step['execution_provenance'] in {'DETERMINISTIC', 'NOT_SENT'} for step in worker.list('step_runs'))
+    assert bulk_jobs.advance(scoped, batch['id'])['state'] == 'FAILED'
+    assert analytics.review_statistics()['reviewed_alerts'] == 0
+    with pytest.raises(Conflict): analytics.freeze_analytical_inputs('TEST_ONLY')
+    with pytest.raises(Conflict): workspace.ReferenceTraining(scoped).observations('VALIDATION')
+    outside = next(row['id'] for row in corpus().page(limit=100)['items'])
+    with pytest.raises(LookupError): workspace.case(scoped, outside)
+    # Deleting a serving chunk must fail closed rather than restore the old 40,000-case view.
+    scoped.db.collection('baseline_workspace_chunks').document(active['chunks'][0]['id']).delete()
+    with pytest.raises(Conflict): workspace.queue(scoped)
     chunk = first['chunks'][0]['id']
     repo.db.collection('seeded_baseline_chunks').document(chunk).update({'body.scope': 'RESERVED'})
     with pytest.raises(Conflict): baseline.active(scoped)
@@ -96,6 +186,8 @@ def test_durable_duplicate_start_capacity_pause_and_frozen_source(repo):
     assert results[0]['id'] == results[1]['id'] and results[0]['counts']['PENDING'] == 2
     job = bulk_jobs.advance(repo, results[0]['id'])
     assert job['state'] == 'PAUSED_CAPACITY' and not any(m['parent_id'] for m in job['members'])
+    assert "Today's AI switch is off" in job['waiting_message'] and not job['can_resume']
+    with pytest.raises(Conflict): bulk_jobs.decision(repo, job['id'], job['revision'], 'resume', 'test-operator')
     with pytest.raises(Conflict): bulk_jobs.decision(repo, job['id'], 0, 'cancel', 'test-operator')
     cancelled = bulk_jobs.decision(repo, job['id'], job['revision'], 'cancel', 'test-operator')
     assert cancelled['state'] == 'CANCELLED' and repo.get('policy_controls', ID) == before
@@ -184,6 +276,11 @@ def test_corpus_evolution_private_reads_scope_limits_and_no_automatic_work(repo,
         return {'uid': 'operator-demo' if token == 'operator' else 'outside-allowlist'}
     monkeypatch.setattr(api.auth, 'verify_id_token', claims)
     client = TestClient(api.create_app())
+    from backend.bulk_reference import SIZE
+    public_summary = client.get('/api/demo/bulk/summary').json()
+    assert public_summary['reference_walkthrough_cases'] == SIZE
+    assert public_summary['training_transactions'] == corpus().manifest['training_transactions']
+    assert public_summary['initially_unprocessed'] == corpus().manifest['initially_unprocessed']
     base = '/api/operator/bulk/evolution'
     reads = ['/review-summary', '/rule-matrix', '/snapshots', '/patterns', '/trends', '/observations', '/auto-label/candidates', '/auto-label/calibrations', '/auto-label/assessments', '/public-brief']
     for suffix in reads:

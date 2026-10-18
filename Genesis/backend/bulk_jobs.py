@@ -8,13 +8,29 @@ from .repository import Conflict, Repository, now
 
 
 class BulkRepository(Repository):
-    def __init__(self, settings, case_id):
+    def __init__(self, settings, case_id, dataset_id=ID, db=None):
         super().__init__(settings, ID)
+        if db is not None: self.db = db
+        self.dataset_id = dataset_id
         self.case_id = case_id
-        if corpus().row(case_id)["partition"] != "PENDING": raise Conflict("Reference cohorts are not operational investigations")
+        if dataset_id == ID:
+            if corpus().row(case_id)["partition"] != "PENDING": raise Conflict("Reference cohorts are not operational investigations")
+        else:
+            from .baseline_workspace import view, rows
+            workspace = view(self)
+            if not workspace or dataset_id != workspace["baseline_id"]: raise Conflict("Active baseline changed; refresh the queue")
+            member = next((row for row in rows(self, workspace) if row["id"] == case_id), None)
+            if not member or member["reference"]: raise Conflict("Only pending cases in the active baseline can be investigated")
 
     def load_dataset(self):
-        return corpus().dataset(self.case_id)
+        return corpus().dataset(self.case_id).model_copy(update={"id": self.dataset_id})
+
+    def source_case(self):
+        from .engine import detect
+        source = corpus().case(self.case_id)
+        data = self.load_dataset()
+        return {**source, "dataset_id": self.dataset_id, "reference_record": None,
+            "alerts": detect(data, data.cases[self.case_id])}
 
     def operational_case(self, case_id):
         if case_id != self.case_id: raise Conflict("Case scope mismatch")
@@ -29,18 +45,24 @@ class BulkRepository(Repository):
     def list(self, collection, dataset_id=None):
         if collection in {"alerts", "step_runs", "feedback_events"}:
             query = self.db.collection(collection).where(filter=firestore.FieldFilter("case_id", "==", self.case_id))
-            return [{"id": doc.id, **doc.to_dict()} for doc in query.stream(timeout=10) if doc.to_dict().get("dataset_id") == ID]
+            return [{"id": doc.id, **doc.to_dict()} for doc in query.stream(timeout=10) if doc.to_dict().get("dataset_id") == self.dataset_id]
         return super().list(collection, dataset_id)
 
     def materialize(self):
-        source = corpus().case(self.case_id)
+        source = self.source_case()
         for alert in source["alerts"]:
             try: self.create("alerts", alert["id"], alert)
             except AlreadyExists:
                 old = self.get("alerts", alert["id"])
-                if not old or old["dataset_id"] != ID or old["case_id"] != self.case_id or old["rule_id"] != alert["rule_id"]:
+                if not old or old["dataset_id"] != self.dataset_id or old["case_id"] != self.case_id or old["rule_id"] != alert["rule_id"]:
                     raise Conflict("Source alert integrity failed")
         return source
+
+    def _bulk_progress(self, tx, case_id, changed_alert_id, changes):
+        result = super()._bulk_progress(tx, case_id, changed_alert_id, changes)
+        if result and self.dataset_id != ID:
+            return self.db.collection("bulk_case_progress").document(stable_id(self.dataset_id, case_id)), result[1]
+        return result
 
 
 def scoped(repo, row):
@@ -54,6 +76,11 @@ def scoped(repo, row):
         if row.get("kind") == "EVOLUTION":
             from .bulk_analytics import AnalyticsRepository
             return AnalyticsRepository(repo.settings)
+    from .baseline_workspace import selected_id, analytics
+    baseline_id = selected_id(repo)
+    if baseline_id and row.get("dataset_id") == baseline_id:
+        if row.get("case_id"): return BulkRepository(repo.settings, row["case_id"], row["dataset_id"], repo.db)
+        if row.get("kind") == "EVOLUTION": return analytics(repo)
     raise LookupError("Record not found in the current corpus")
 
 
@@ -112,10 +139,8 @@ def queue(repo, *, limit=50, cursor=0, identity="", customer_type="", rule="", q
 
 
 def source(repo, case_id, dataset_id, *, materialize=True):
-    if dataset_id == ID:
-        worker = BulkRepository(repo.settings, case_id)
-        return worker, worker.materialize() if materialize else corpus().case(case_id)
-    raise ValueError("Only the current corpus is operational")
+    worker = BulkRepository(repo.settings, case_id, dataset_id, repo.db)
+    return worker, worker.materialize() if materialize else worker.source_case()
 
 
 def eligible(repo, case):
@@ -131,11 +156,11 @@ def eligible(repo, case):
 
 
 def preview(repo, case_ids, dataset_id, actor):
-    if dataset_id != ID: raise ValueError("Only the current corpus is operational")
     if not 1 <= len(case_ids) <= 100 or len(case_ids) != len(set(case_ids)): raise ValueError("Select 1-100 distinct cases")
+    from .baseline_workspace import selected_id
+    if dataset_id != (selected_id(repo) or ID): raise Conflict("Dataset changed; refresh the investigation queue")
     from .calibration import active_label_policy
-    policy_repo = Repository(repo.settings, dataset_id)
-    policy_repo.db = repo.db
+    policy_repo, _ = source(repo, case_ids[0], dataset_id, materialize=False)
     policy = policy_repo.active_policy()
     labels = active_label_policy(policy_repo)
     members = []
@@ -184,7 +209,8 @@ def create(repo, request, actor):
 
 def detail(repo, ident):
     job = repo.get("bulk_jobs", ident)
-    if not job or job.get("dataset_id") != ID: raise LookupError("Batch not found")
+    from .baseline_workspace import selected_id
+    if not job or job.get("dataset_id") not in {ID, selected_id(repo)}: raise LookupError("Batch not found")
     members = [{"id": d.id, **d.to_dict()} for d in repo.db.collection("bulk_members").where(filter=firestore.FieldFilter("job_id", "==", ident)).limit(101).stream(timeout=10)]
     if len(members) != len(job["case_ids"]): raise Conflict("Batch membership integrity failed")
     for member in members:
@@ -194,11 +220,28 @@ def detail(repo, ident):
             member["state"] = parent["state"]
             member["error_code"] = parent.get("error_code")
     counts = {state: sum(m["state"] == state for m in members) for state in ("PENDING", "QUEUED", "RUNNING", "COMPLETE", "FAILED", "SKIPPED", "DISPATCH_FAILED")}
-    return {**job, "members": members, "counts": counts}
+    pending = next((m for m in members if m["state"] == "PENDING"), None)
+    blockers = []
+    if job["state"] in {"QUEUED", "PAUSED", "PAUSED_CAPACITY", "PAUSED_OUTCOME"} and not counts["RUNNING"]:
+        if not repo.settings.ai_authorized(): blockers.append("Verified local Gemini access is disabled or expired." if repo.settings.mode == "local" else "Verified cloud AI access is disabled or expired.")
+        daily = repo.daily_control()
+        if not daily["live_enabled"]: blockers.append("Today's AI switch is off in Admin.")
+        required = 3 * len(pending["alert_ids"]) if pending else 0
+        if daily["limit"] - daily["attempts_reserved"] < required: blockers.append("Today's remaining attempt allowance cannot cover the next case.")
+    if job["state"] == "PAUSED_CAPACITY":
+        message = " ".join(blockers) or "Access is ready. Resume this batch to continue."
+    elif job["state"] == "QUEUED" and not counts["RUNNING"]:
+        message = " ".join(blockers) or "Queued for the separate worker; no case is running yet."
+    else:
+        message = {"PAUSED": "This batch is paused. Resume it to continue.",
+            "PAUSED_SELECTION": "The selected alerts or policy changed. Inspect the selection before starting a new batch.",
+            "PAUSED_OUTCOME": "Inspect the failed case before acknowledging it and continuing the remaining cases."}.get(job["state"])
+    return {**job, "members": members, "counts": counts, "waiting_message": message, "can_resume": not blockers and job["state"] in {"PAUSED", "PAUSED_CAPACITY", "PAUSED_OUTCOME"} and repo.settings.ai_authorized()}
 
 
 def decision(repo, ident, revision, action, actor, acknowledge_failed=False):
     observed = detail(repo, ident)
+    if action == "resume" and not observed["can_resume"]: raise Conflict(observed["waiting_message"] or "This batch cannot be resumed")
     failed_parents = [m["parent_id"] for m in observed["members"] if m["state"] in {"FAILED", "DISPATCH_FAILED"} and m["parent_id"]]
     @firestore.transactional
     def change(tx):

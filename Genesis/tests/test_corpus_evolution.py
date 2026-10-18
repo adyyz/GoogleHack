@@ -9,8 +9,9 @@ from backend.repository import Conflict
 from backend.rule_intelligence import matrix
 
 
-def test_calibration_uses_every_chunk_not_the_three_prompt_examples():
-    events = [{"id": f"feedback-{index}", "dataset_id": ID, "provenance": "HUMAN_OPERATOR",
+@pytest.mark.parametrize('dataset_id', [ID, 'a' * 64])
+def test_calibration_uses_every_chunk_not_the_three_prompt_examples(dataset_id):
+    events = [{"id": f"feedback-{index}", "dataset_id": dataset_id, "provenance": "HUMAN_OPERATOR",
         "alert_id": f"alert-{index}", "triage_run_id": f"run-{index}"} for index in range(9)]
     records = {("feedback_events", row["id"]): row for row in events}
     chunks = []
@@ -20,7 +21,7 @@ def test_calibration_uses_every_chunk_not_the_three_prompt_examples():
         records["bulk_evidence_chunks", ident] = {"references": refs}
         chunks.append({"id": ident, "count": len(refs)})
     records["analytical_snapshots", "snapshot"] = {"body": {"bulk_reference_chunks": chunks, "sample_sizes": {"reviewed_alerts": 9}}}
-    repo = SimpleNamespace(get=lambda collection, ident: records.get((collection, ident)), evolution_context=lambda _: {"human_feedback": events[:3]})
+    repo = SimpleNamespace(dataset_id=dataset_id, get=lambda collection, ident: records.get((collection, ident)), evolution_context=lambda _: {"human_feedback": events[:3]})
     assert AnalyticsRepository.calibration_feedback(repo, "snapshot") == events
     records["feedback_events", events[-1]["id"]] = {**events[-1], "provenance": "SYNTHETIC_REFERENCE"}
     with pytest.raises(Conflict, match="review changed"): AnalyticsRepository.calibration_feedback(repo, "snapshot")
@@ -59,7 +60,7 @@ def test_observed_effects_separate_reassessments_and_subsequent_human_reviews(mo
         "applied_policy_id": "policy", "after": {"correct_fp_resolutions": 3}, "validation": None}],
         "auto_label_assessments": [{"body": {"candidate_id": "candidate", "alert_id": "reassessed", "restoration": False}}],
         "feedback_events": []}
-    repo = SimpleNamespace(list=lambda name: deepcopy(rows[name]), get=lambda *_: {"rule_id": "HIGH_VALUE"},
+    repo = SimpleNamespace(dataset_id=ID, list=lambda name: deepcopy(rows[name]), get=lambda *_: {"rule_id": "HIGH_VALUE"},
         page=lambda *_args, **_kwargs: {"items": deepcopy(rows["auto_label_candidates"]), "next_cursor": None})
     monkeypatch.setattr(calibration, "active_label_policy", lambda _: {"revision": 1})
     first = AnalyticsRepository.observed_effects(repo)["items"][0]

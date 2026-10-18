@@ -1,6 +1,9 @@
 """Current corpus APIs; private operations require verified Firebase tokens."""
 from pathlib import Path
 from typing import Annotated
+import json
+from urllib.parse import urlencode
+from urllib.request import Request as URLRequest, urlopen
 
 import firebase_admin
 from firebase_admin import auth
@@ -34,7 +37,7 @@ def create_app(settings: Settings | None = None):
     @app.middleware("http")
     async def private_cache_policy(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/api/operator/", "/api/admin/")):
+        if request.url.path == '/api/config' or request.url.path.startswith(("/api/operator/", "/api/admin/", "/api/demo/bulk/", "/api/demo/usage")):
             response.headers["Cache-Control"] = "no-store"
             response.headers.append("Vary", "Authorization")
         return response
@@ -64,17 +67,18 @@ def create_app(settings: Settings | None = None):
 
     @app.get("/api/demo/usage")
     def public_usage():
-        from .bulk_analytics import usage
-        return usage(repo)
+        from .baseline_workspace import accounting
+        return accounting(repo)
 
     @app.get("/api/operator/usage")
     def operator_usage(_actor=Depends(operator), scope: str = Query("corpus", pattern="^corpus$")):
-        from .bulk_analytics import usage
-        return usage(repo, operator_summary=True)
+        from .baseline_workspace import accounting
+        return accounting(repo, operator_summary=True)
 
     @app.get("/api/operator/runs")
     def runs(_actor=Depends(operator), scope: str = Query("corpus", pattern="^corpus$"), limit: int = Query(50, ge=1, le=100), cursor: str | None = Query(None, pattern=r"^[A-Za-z0-9_-]{1,128}$")):
-        page = repo.page("pipeline_runs", limit, cursor, [("dataset_id", CORPUS_ID)], order="created_at")
+        from .baseline_workspace import selected_id
+        page = repo.page("pipeline_runs", limit, cursor, [("dataset_id", selected_id(repo) or CORPUS_ID)], order="created_at")
         return {**page, "items": [run_summary(run) for run in page["items"]]}
 
     @app.get("/api/operator/runs/{run_id}")
@@ -96,10 +100,42 @@ def create_app(settings: Settings | None = None):
 
     @app.get("/api/config")
     def config():
-        return {"mode": settings.mode, "project_id": settings.project_id,
+        value = {"mode": settings.mode, "project_id": settings.project_id,
             "auth_emulator_url": "http://" + settings.auth_host if settings.mode == "local" else None,
             "firebase_web_api_key": settings.firebase_web_api_key if settings.mode == "cloud" else None,
             "live_ai_enabled": settings.live_ai}
+        credentials = settings.operator_demo_credentials()
+        if (settings.mode == 'cloud' and settings.operator_demo_login_enabled and credentials
+            and credentials['uid'] in settings.operator_uids and credentials['uid'] in settings.admin_uids):
+            value['operator_demo_email'] = credentials['email']
+        return value
+
+    @app.post('/api/operator/demo-login')
+    def demo_login():
+        # Enable only after verifying private Cloud Run IAM; disable before public release.
+        credentials = settings.operator_demo_credentials()
+        if settings.mode != 'cloud' or not settings.operator_demo_login_enabled or not credentials:
+            raise HTTPException(404, 'Stored operator login is unavailable')
+        uid = credentials['uid']
+        if uid not in settings.operator_uids or uid not in settings.admin_uids:
+            raise HTTPException(403, 'Stored operator is not allowlisted')
+        if not settings.firebase_web_api_key: raise HTTPException(503, 'Operator sign-in is not configured')
+        try:
+            url = 'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?' + urlencode({'key': settings.firebase_web_api_key})
+            payload = json.dumps({'email': credentials['email'], 'password': credentials['password'], 'returnSecureToken': True}).encode()
+            request = URLRequest(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+            with urlopen(request, timeout=10) as response:
+                raw = response.read(65537)
+            if len(raw) > 65536: raise ValueError()
+            result = json.loads(raw)
+            token = result.get('idToken')
+            if not isinstance(token, str) or not token or result.get('localId') != uid: raise ValueError()
+            claims = auth.verify_id_token(token, app=firebase_app, check_revoked=True)
+            if claims.get('uid') != uid: raise ValueError()
+        except Exception:
+            # Transport failures may contain request data; expose no provider detail.
+            raise HTTPException(502, 'Stored operator sign-in failed') from None
+        return {'idToken': token}
 
     @app.get("/api/system/agents")
     def agents():
@@ -111,7 +147,8 @@ def create_app(settings: Settings | None = None):
 
     @app.get("/api/operator/audit")
     def audit(_actor=Depends(operator), scope: str = Query("corpus", pattern="^corpus$"), limit: int = Query(50, ge=1, le=100), cursor: str | None = Query(None, pattern=r"^[A-Za-z0-9_-]{1,128}$")):
-        filters = [("dataset_id", CORPUS_ID)]
+        from .baseline_workspace import selected_id
+        filters = [("dataset_id", selected_id(repo) or CORPUS_ID)]
         return repo.page("audit_events", limit, cursor, filters, order="occurred_at")
 
     def alert_repo(alert_id):

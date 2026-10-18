@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { request } from './api';
 import { Dialog } from './Dialog';
 import { UsageDisplay } from './Usage';
+import { useCorpusSummary } from './useCorpusSummary';
 import type { AuditEvent, DailyControl, OperatorUsage, Page, RunSummary } from './types';
 
 export function Admin({ token, isAdmin, canEnable, onError, onRun }: { token: string; isAdmin: boolean; canEnable: boolean; onError: (error: unknown) => void; onRun: (id: string) => void }) {
@@ -11,6 +12,7 @@ export function Admin({ token, isAdmin, canEnable, onError, onRun }: { token: st
   const [limit, setLimit] = useState('120');
   const [enabled, setEnabled] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const summary = useCorpusSummary(onError, refresh);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -55,7 +57,7 @@ export function Admin({ token, isAdmin, canEnable, onError, onRun }: { token: st
     } catch (error) { onError(error); } finally { setLoading(false); }
   }
   return <><section className="panel"><div className="panel-heading"><h2>Operational usage</h2><button className="text-button" disabled={loading || saving} onClick={() => setRefresh(value => value + 1)}>Refresh admin data</button></div>
-    <p className="muted">Usage and histories cover the current 40,000-case corpus. Daily call controls apply to all attempts.</p>
+    <p className="muted">Usage and histories cover the current {summary?.cases.toLocaleString() ?? 'Loading'}-case corpus. Daily call controls apply to all attempts.</p>
     {loading && <p role="status">Loading operational data…</p>}{error && <p className="error" role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {usage && <><UsageDisplay usage={usage} /><dl className="usage-values"><dt>Provider attempts</dt><dd>{usage.provider_attempts}</dd><dt>Failed steps</dt><dd>{usage.failed_attempts}</dd><dt>Retries</dt><dd>{usage.retry_count}</dd><dt>Mean step latency</dt><dd>{usage.mean_duration_ms === null ? 'Unavailable' : `${Math.round(usage.mean_duration_ms)} ms`}</dd><dt>Daily attempt reservations</dt><dd>{usage.daily.attempts_reserved} / {usage.daily.limit}</dd><dt>UTC control day</dt><dd>{usage.daily.day_utc}</dd><dt>Live AI</dt><dd>{usage.daily.live_enabled ? 'Enabled' : 'Disabled'}</dd></dl>
       {isAdmin ? <form noValidate onSubmit={submit}><h3>Daily AI controls</h3><p>Changes apply to the next attempt. A new UTC day starts disabled.</p>

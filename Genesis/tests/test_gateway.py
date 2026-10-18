@@ -67,6 +67,7 @@ def test_closed_gate_and_oversize_precount_never_generate(monkeypatch):
     repo, step, calls = setup(monkeypatch, count=513)
     result = generate_json(repo, step, "Test prompt", SmokeReply, input_limit=512, output_limit=128)
     assert result.error_code == "CONTEXT_LIMIT"
+    assert result.context_precount_tokens == 513
     assert not repo.reservations and not repo.writes
     assert [kind for kind, _ in calls] == ["count"]
     repo.settings = replace(repo.settings, local_gemini_enabled=False)

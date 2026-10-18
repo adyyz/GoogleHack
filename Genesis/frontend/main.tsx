@@ -117,7 +117,7 @@ function RollingLabel({ text }: { text: string }) {
 }
 
 function SignIn({ onClose, onToken }: { onClose: () => void; onToken: (token: string) => void }) {
-  type AuthConfig = { mode: 'local' | 'cloud'; project_id: string; auth_emulator_url: string | null; firebase_web_api_key: string | null };
+  type AuthConfig = { mode: 'local' | 'cloud'; project_id: string; auth_emulator_url: string | null; firebase_web_api_key: string | null; operator_demo_email?: string };
   const [config, setConfig] = useState<AuthConfig | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -140,12 +140,14 @@ function SignIn({ onClose, onToken }: { onClose: () => void; onToken: (token: st
       if (value.mode === 'local' && value.auth_emulator_url) {
         setEmail('operator@aml-insight.test'); setPassword('local-demo-only');
       } else if (value.mode === 'cloud' && value.firebase_web_api_key && value.project_id) {
-        setEmail(''); setPassword('');
-        const { prepareGoogleSignIn, googleSignInError } = await import('./google-auth');
-        if (controller.current.signal.aborted) return;
-        google.current = prepareGoogleSignIn(value.project_id, value.firebase_web_api_key);
-        googleError.current = googleSignInError;
-        setGoogleReady(true);
+        setEmail(value.operator_demo_email || ''); setPassword('');
+        try {
+          const { prepareGoogleSignIn, googleSignInError } = await import('./google-auth');
+          if (controller.current.signal.aborted) return;
+          google.current = prepareGoogleSignIn(value.project_id, value.firebase_web_api_key);
+          googleError.current = googleSignInError;
+          setGoogleReady(true);
+        } catch { if (!controller.current.signal.aborted) setError('Google sign-in could not be prepared. Use email and password, or retry setup.'); }
       } else {
         setError('Operator sign-in is not configured. Contact the administrator.');
       }
@@ -153,9 +155,9 @@ function SignIn({ onClose, onToken }: { onClose: () => void; onToken: (token: st
     finally { if (!controller.current.signal.aborted) setBusy(false); }
   }
   useEffect(() => { void loadConfiguration(); return () => { controller.current.abort(); void google.current?.dispose(); }; }, []);
-  const ready = !!config && (config.mode === 'local' ? !!config.auth_emulator_url : googleReady);
+  const ready = !!config && (config.mode === 'local' ? !!config.auth_emulator_url : !!config.firebase_web_api_key);
   async function signInGoogle() {
-    if (busy || !ready || !google.current) return;
+    if (busy || !googleReady || !google.current) return;
     setBusy(true); setError('');
     const signal = controller.current.signal;
     try {
@@ -168,32 +170,47 @@ function SignIn({ onClose, onToken }: { onClose: () => void; onToken: (token: st
     } finally { if (!signal.aborted) setBusy(false); }
   }
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); if (busy || !ready || config?.mode !== 'local') return;
+    event.preventDefault(); if (busy || !ready || !config) return;
     const fields = { email: !email.trim() || emailRef.current?.validity.typeMismatch ? 'Enter a valid email address.' : '', password: !password ? 'Enter your password.' : '' };
     setInvalid(fields); setError('');
     if (fields.email || fields.password) { (fields.email ? emailRef : passwordRef).current?.focus(); return; }
     setBusy(true);
     const signal = AbortSignal.any([controller.current.signal, AbortSignal.timeout(15000)]);
     try {
-      const endpoint = `${config.auth_emulator_url}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=emulator-only`;
+      const endpoint = config.mode === 'local'
+        ? `${config.auth_emulator_url}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=emulator-only`
+        : `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(config.firebase_web_api_key!)}`;
       const response = await fetch(endpoint, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim(), password, returnSecureToken: true }) });
       const body = await response.json();
-      if (!response.ok || typeof body.idToken !== 'string' || !body.idToken) throw new Error('Local sign-in failed. Seed the emulator and check your details.');
+      if (!response.ok || typeof body.idToken !== 'string' || !body.idToken) throw new Error(config.mode === 'local' ? 'Local sign-in failed. Seed the emulator and check your details.' : 'Sign-in failed. Check your operator email and password.');
       await request('/api/operator/session', body.idToken, { signal });
       if (!signal.aborted) { setPassword(''); onToken(body.idToken); }
     } catch (e) { if (!controller.current.signal.aborted) setError(e instanceof TypeError || (e as Error).name === 'TimeoutError' ? 'Unable to reach sign-in. Check your connection and retry.' : (e as Error).message); } finally { if (!controller.current.signal.aborted) setBusy(false); }
   }
-  return <Dialog title="Operator sign-in" description={config?.mode === 'local' ? 'These fixture credentials work only with the local emulator. No cloud account is used.' : 'Continue with your approved Google account. Operator access is checked after sign-in.'} onClose={onClose}>
-    {config?.mode === 'local' ? <form noValidate onSubmit={submit}>
+  async function storedLogin() {
+    if (busy || config?.mode !== 'cloud' || !config.operator_demo_email) return;
+    setBusy(true); setError('');
+    const signal = controller.current.signal;
+    try {
+      const result = await request<{idToken: string}>('/api/operator/demo-login', '', { method: 'POST', signal });
+      if (typeof result.idToken !== 'string' || !result.idToken) throw new Error('Stored operator sign-in failed.');
+      if (signal.aborted) return;
+      await request('/api/operator/session', result.idToken, { signal });
+      if (!signal.aborted) { setPassword(''); onToken(result.idToken); }
+    } catch (failure) { if (!signal.aborted) setError((failure as Error).message); }
+    finally { if (!signal.aborted) setBusy(false); }
+  }
+  return <Dialog title="Operator sign-in" description={config?.mode === 'local' ? 'These fixture credentials work only with the local emulator. No cloud account is used.' : 'Operator email and password. Google sign-in stays available.'} onClose={onClose}>
+    {config?.mode === 'cloud' && <div className="google-signin-flow">
+      <button className="google-signin" type="button" disabled={busy || !googleReady} aria-busy={busy} onClick={() => void signInGoogle()}><Icon name="google" size={20} /><span>{busy && googleReady ? 'Signing in…' : 'Continue with Google'}</span></button>
+      <p>Your operator session stays in this tab and ends when you reload or sign out.</p>
+      {config.operator_demo_email && <button className="secondary" type="button" disabled={busy} onClick={() => void storedLogin()}>Use stored operator login</button>}
+    </div>}
+    <form noValidate onSubmit={submit}>
       <div className="form-field"><label htmlFor="operator-email">Email</label><input id="operator-email" ref={emailRef} type="email" autoComplete="username" required disabled={busy || !ready} value={email} aria-invalid={!!invalid.email} aria-describedby={invalid.email ? 'email-error' : undefined} onChange={e => setEmail(e.target.value)} />{invalid.email && <span className="field-error" id="email-error">{invalid.email}</span>}</div>
       <div className="form-field"><label htmlFor="operator-password">Password</label><span className="password-control"><input id="operator-password" ref={passwordRef} type={visible ? 'text' : 'password'} autoComplete="current-password" required disabled={busy || !ready} value={password} aria-invalid={!!invalid.password} aria-describedby={invalid.password ? 'password-error' : undefined} onChange={e => setPassword(e.target.value)} /><button type="button" onClick={() => setVisible(!visible)} aria-label={visible ? 'Hide password' : 'Show password'} aria-pressed={visible}>{visible ? 'Hide' : 'Show'}</button></span>{invalid.password && <span className="field-error" id="password-error">{invalid.password}</span>}</div>
-      {error && <p className="error" role="alert">{error}</p>}{!ready && !busy && <button className="text-button" type="button" onClick={() => void loadConfiguration()}>Retry sign-in setup</button>}<button className="primary" disabled={busy || !ready} aria-busy={busy}>{busy ? 'Verifying…' : 'Sign in locally'}</button>
-    </form> : <div className="google-signin-flow">
-      {error && <p className="error" role="alert">{error}</p>}
-      {!ready && !busy && <button className="text-button" onClick={() => void loadConfiguration()}>Retry sign-in setup</button>}
-      <button className="google-signin" disabled={busy || !ready} aria-busy={busy} onClick={() => void signInGoogle()}><Icon name="google" size={20} /><span>{busy ? googleReady ? 'Signing in…' : 'Loading sign-in…' : 'Continue with Google'}</span></button>
-      <p role="status">{busy && googleReady ? 'Complete sign-in in the Google window, or close this dialog to cancel.' : 'Your operator session stays in this tab and ends when you reload or sign out.'}</p>
-    </div>}
+      {error && <p className="error" role="alert">{error}</p>}{(!ready || (config?.mode === 'cloud' && !googleReady)) && !busy && <button className="text-button" type="button" onClick={() => void loadConfiguration()}>Retry sign-in setup</button>}<button className="primary" disabled={busy || !ready} aria-busy={busy}>{busy ? 'Verifying…' : config?.mode === 'local' ? 'Sign in locally' : 'Sign in with email'}</button>
+    </form>
   </Dialog>;
 }
 

@@ -115,13 +115,15 @@ def active(repo):
 def progress(repo):
     selected = active(repo)
     if not selected: return None
-    reviewed = repo.db.collection('seeded_advisory_reviews').where(filter=firestore.FieldFilter('baseline_id', '==', selected['id'])).count().get(timeout=15)[0][0].value
+    query = repo.db.collection('seeded_advisory_reviews').where(filter=firestore.FieldFilter('baseline_id', '==', selected['id']))
+    reviewed = query.count().get(timeout=15)[0][0].value
+    drafted = query.where(filter=firestore.FieldFilter('provenance', '==', 'LOCAL_AGENT_DRAFT_ADVISORY_NOT_HUMAN')).count().get(timeout=15)[0][0].value
     return {'id': selected['id'], 'total_cases': 3000, 'baseline_cases': 2000, 'reserved_cases': 1000,
-        'ai_reviewed_cases': reviewed, 'pending_ai_reviews': 2000 - reviewed,
+        'ai_reviewed_cases': reviewed - drafted, 'agent_draft_reviewed_cases': drafted, 'pending_ai_reviews': 2000 - reviewed,
         'training': selected['body']['training'], 'reserved': selected['body']['reserved'], 'human_reviews': 0}
 
 
-def run_reviews(repo):
+def run_reviews(repo, *, resume_refused=False):
     from .quick_review import inputs, run
     if repo.settings.mode != 'local' or not repo.settings.local_gemini_valid():
         raise Conflict('Verified local Gemini Free Tier access is required')
@@ -130,12 +132,13 @@ def run_reviews(repo):
     done = {r['case_id'] for r in repo.list('seeded_advisory_reviews', SEEDED_ID) if r['baseline_id'] == selected['id']}
     rows = [catalog()[r['case_id']] for r in selected['BASELINE'] if r['case_id'] not in done]
     processed, batch_size = 0, 5
+    resume_id = 'explicit-operator-resume' if resume_refused else None
     while rows:
         daily = repo.daily_control()
         if daily['attempts_reserved'] >= daily['limit']: return {'processed': processed, 'stop': 'DAILY_CAP'}
         if not repo.settings.local_gemini_valid(): return {'processed': processed, 'stop': 'VERIFICATION_EXPIRED'}
         cases = inputs(min(batch_size, len(rows)), rows)
-        result = run(repo, cases=cases, baseline_id=selected['id'])
+        result = run(repo, cases=cases, baseline_id=selected['id'], resume_id=resume_id)
         print(json.dumps({key: result.get(key) for key in ['run_id', 'state', 'error_code', 'cases', 'reused']}), flush=True)
         if result.get('error_code') == 'CONTEXT_LIMIT' and len(cases) > 1:
             batch_size = max(1, len(cases) // 2)
@@ -153,6 +156,7 @@ if __name__ == '__main__':
     from .repository import Repository
     parser = argparse.ArgumentParser()
     parser.add_argument('action', choices=['prepare', 'run', 'status'], default='status', nargs='?')
+    parser.add_argument('--resume-refused', action='store_true', help='Explicitly retry a sealed HTTP 429 refusal once; never retry unknown outcomes')
     args = parser.parse_args(); repo = Repository(Settings.load(), SEEDED_ID)
-    result = prepare(repo) if args.action == 'prepare' else run_reviews(repo) if args.action == 'run' else progress(repo)
+    result = prepare(repo) if args.action == 'prepare' else run_reviews(repo, resume_refused=args.resume_refused) if args.action == 'run' else progress(repo)
     print(json.dumps(result, default=str))

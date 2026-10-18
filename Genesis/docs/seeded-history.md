@@ -1,5 +1,11 @@
 # Local seeded history
 
+## Current advisory coverage after CI-003
+
+The baseline has 30 preserved genuine Gemini reviews and 1,970 imported coding-agent drafts. There are zero unfilled advisory records, but only those 30 cases have actual Gemini advisory reviews. Drafts carry LOCAL_AGENT_DRAFT_ADVISORY_NOT_HUMAN, null run/step IDs, the source baseline ID and document checksum; they create no provider ledger, token usage, human feedback or qualifying learning evidence. The reserved 1,000 remain excluded.
+
+The supplied document is unchanged. Its baseline ID differs from this checkout, so the importer requires explicit compatibility validation of the full case set, source alerts, citations and manual-review flags before writes. Repeat import creates zero records. Local before/after backups exist. No new Gemini call, A5 output, human decision or operational policy was produced. See [the completed code ledger](code-improvements.md) for portable dry-run/apply commands.
+
 ## Active 3,000-case baseline
 
 The active practice set is now 3,000 cases: 2,000 baseline cases from 133 identities and 1,000 reserved cases from 67 different identities. Both sets cover all nine rules and both customer types. The baseline contains 1,015 individual and 985 organization cases; the reserve contains 536 individual and 464 organization cases. Rule allocation is approximately equal except DORMANT, whose available source capacity is 133 baseline / 67 reserved. Multi-rule alert counts overlap.
@@ -18,7 +24,9 @@ Bulk review sends up to five cases per generation request, with Python scores, s
 
 Each successful request has one immutable EVALUATE attempt in `step_runs`. Its case reviews are committed atomically with parent completion into `seeded_advisory_reviews`, carrying REAL_PROVIDER_AI_ADVISORY_NOT_HUMAN provenance, source alert mappings and baseline ID. These records do not count as completed full investigations, human feedback or genuine calibration eligibility. Invalid responses are discarded; sanitized validation error types are retained. Repeating a stored failed request does not send it again automatically.
 
-Actual progress at the final check: 20 baseline cases / 33 alert opinions saved from real Gemini requests; 1,980 baseline cases pending; zero reserved cases sent. HTTP 429 stopped further execution and the daily switch was disabled. No random TP/FP labels were generated, and no operational weights or cutoffs changed.
+Actual progress at the final check: 30 baseline cases / 50 alert opinions saved from real Gemini requests; 1,970 baseline cases pending; zero reserved cases sent. HTTP 429 stopped further execution and the daily switch was disabled. No random TP/FP labels were generated, and no operational weights or cutoffs changed.
+
+An explicit user-requested continuation can add `-ResumeRefused` to the wrapper command. This permits one separately recorded retry of a sealed HTTP 429 refusal with no output. Its run ID is deterministic; repeated invocation does not send that retry again. Unknown outcomes and all other failed states remain blocked. Each continuation still stops on its next refusal, expiry or cap.
 
 The local source UI shows the active allocation and actual advisory progress in Evolution → Practice with synthetic data → Stored seeded history. Refresh explicitly. Earlier full investigations and reference-only fitting are labeled separately.
 

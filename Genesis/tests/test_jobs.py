@@ -68,6 +68,48 @@ def test_context_preserves_facts_and_protected_sequence_without_labels():
     assert evidence["evidence_ids"] == enrich(data, case)["evidence_ids"]  # Never mutate frozen evidence.
 
 
+def test_long_history_is_bounded_without_losing_protected_deposits_or_source_facts():
+    from copy import deepcopy
+    from datetime import datetime, timedelta
+    data = generate_dataset()
+    case = next(case for case in data.cases.values() if case.split == Split.DEMO and case.scenario_family == 'structuring')
+    evidence = enrich(data, case)
+    at = datetime.fromisoformat(evidence['trigger']['occurred_at'])
+    template = evidence['trigger']
+    deposits = [{**template, 'id': f'deposit-{n}', 'occurred_at': (at - timedelta(hours=48-n)).isoformat(),
+        'type': 'CASH', 'direction': 'CREDIT', 'amount_aud_minor': 900_000} for n in range(3)]
+    later = [{**template, 'id': f'later-{n}', 'occurred_at': (at - timedelta(hours=24-n)).isoformat(), 'type': 'WIRE'} for n in range(20)]
+    evidence['history'] = deposits + later
+    evidence['evidence_ids'] = [evidence[key]['id'] for key in ('customer', 'account', 'trigger')] + [row['id'] for row in evidence['history']]
+    before = deepcopy(evidence)
+    for leg in ('A2', 'A4'):
+        selected = context_for(leg, evidence, risk_assessment(evidence), {})
+        ids = {row['id'] for row in selected['chronology']}
+        assert len(ids) == 8 and {row['id'] for row in deposits} <= ids
+        assert later[-1]['id'] in ids
+        assert selected['chronology_selection']['omitted'] == 15
+        assert selected['facts'] == evidence['facts'] and selected['protected_signals'] == evidence['protected_signals']
+        assert ids <= set(selected['evidence_ids']) <= set(evidence['evidence_ids'])
+    assert evidence == before
+
+
+def test_context_refusal_preserves_precount_without_provider_usage():
+    from backend.jobs import _model_attempt
+    from backend.gateway import GatewayResult
+    from backend.models import StepRun
+    from backend.repository import now
+    rows = {}
+    repo = SimpleNamespace(get=lambda collection, ident: rows.get(ident),
+        create=lambda collection, ident, body: rows.__setitem__(ident, body))
+    step = StepRun(id='count-refused', dataset_id='test', run_id='test-run', leg_id='A2', config_bundle_id='test-bundle',
+        state='STARTED', started_at=now(), input_hash='test-input')
+    row = _model_attempt(repo, step, lambda _: GatewayResult(error_code='CONTEXT_LIMIT', context_precount_tokens=4097))
+    assert row['state'] == 'FAILED' and row['execution_provenance'] == 'NOT_SENT'
+    assert row['context_precount_tokens'] == 4097
+    assert row['usage_status'] == row['cost_status'] == 'NOT_APPLICABLE'
+    assert row['total_tokens'] is None and row['output'] is None
+
+
 def test_model_step_uses_one_linked_retry_and_never_repeats_sealed_attempts(monkeypatch):
     from backend.dataset import DATASET_ID, stable_id
     from backend.gateway import GatewayResult

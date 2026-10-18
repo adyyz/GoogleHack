@@ -1,0 +1,16 @@
+---
+description: Record Genesis code improvements as sequential junior-dev tasks, and mimic model calls locally instead of calling Gemini.
+alwaysApply: true
+---
+
+# Code improvement ledger
+
+When a Genesis code fix is identified, append the next task to [Genesis/docs/code-improvements.md](Genesis/docs/code-improvements.md) before editing. One task, one cause. A junior dev or one subagent implements that task only, in order, after every earlier task is `done`.
+
+Include only code changes: a bug, a broken command, or a missing check in existing behavior. Leave quota runs, cloud deploy, billing, and submission assets in [Genesis/docs/pending-tasks.md](Genesis/docs/pending-tasks.md).
+
+Each task names its id, status, files, current behavior, the change, numbered steps, tests, and stop conditions. Steps must be executable without guessing. Do not add a task for a feature nobody asked for.
+
+# Model calls
+
+Do not call Gemini, the Developer API, or the free tier. When work needs model JSON, this agent writes the output itself, validates it against the backend's checks, and saves it as a JSON block in a markdown file under `Genesis/docs/`. A ledger task tells the junior dev how to import it. Leave product code unchanged. Label imported records `LOCAL_AGENT_DRAFT_*`. Never mark them `REAL_PROVIDER`, `PROVIDER_REPORTED`, or human, and never draft A5 or human verdicts.

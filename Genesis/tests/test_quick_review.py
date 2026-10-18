@@ -44,3 +44,36 @@ def test_bulk_review_refuses_reserved_cases_before_request(monkeypatch):
     repo = SimpleNamespace(settings=SimpleNamespace(mode='local', local_gemini_valid=lambda: True), dataset_id=SEEDED_ID)
     with pytest.raises(Conflict, match='outside the active'):
         run(repo, cases=cases, baseline_id='test-baseline')
+
+
+@pytest.mark.parametrize('error,attempt_state,retried', [('PROVIDER_HTTP_429', 'FAILED', True),
+    ('PROVIDER_HTTP_503', 'UNKNOWN_OUTCOME', False)])
+def test_explicit_resume_preserves_old_attempt_and_never_repeats_unknown(monkeypatch, error, attempt_state, retried):
+    from backend import seeded_baseline, quick_review
+    from backend.bulk_dataset import SEEDED_ID
+    from backend.gateway import GatewayResult
+    cases = inputs(1); writes = []; controls = []; old_ids = []
+    monkeypatch.setattr(seeded_baseline, 'active', lambda _repo: {'id': 'test-baseline', 'BASELINE': [{'case_id': cases[0]['case_id']}]})
+    def get(collection, ident):
+        if collection == 'pipeline_runs':
+            if not old_ids: old_ids.append(ident)
+            return {'state': 'FAILED', 'error_code': error} if ident == old_ids[0] else None
+        if collection == 'step_runs': return {'state': attempt_state, 'error_code': error,
+            'execution_provenance': 'REAL_PROVIDER', 'finished_at': 'test-only-sealed', 'output': None}
+    batch = SimpleNamespace(update=lambda *args: None, commit=lambda **kwargs: None)
+    repo = SimpleNamespace(settings=SimpleNamespace(mode='local', local_gemini_valid=lambda: True,
+        active_model_id='gemini-3-flash-preview'), dataset_id=SEEDED_ID, get=get,
+        daily_control=lambda: {'revision': 1, 'live_enabled': False, 'limit': 120},
+        create=lambda collection, ident, body: writes.append((collection, ident, body)),
+        update_daily_control=lambda *args: controls.append(args), audit=lambda *args, **kwargs: None,
+        db=SimpleNamespace(batch=lambda: batch, collection=lambda name: SimpleNamespace(document=lambda ident: ident)))
+    # A refusal double proves resume behavior without creating fake successful output.
+    monkeypatch.setattr(quick_review, 'generate_json', lambda *args, **kwargs: GatewayResult())
+    result = run(repo, cases=cases, baseline_id='test-baseline', resume_id='explicit-test-only-resume')
+    if retried:
+        assert result['run_id'] != old_ids[0] and result['state'] == 'FAILED'
+        assert all(ident != old_ids[0] for _, ident, _ in writes)
+        assert len(controls) == 2
+    else:
+        assert result['reused'] and result['run_id'] == old_ids[0]
+        assert not writes and not controls

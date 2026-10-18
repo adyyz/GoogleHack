@@ -29,6 +29,7 @@ class GatewayResult:
     error_code: str | None = "AI_NOT_CONNECTED"
     output: dict | None = None
     step_id: str | None = None
+    context_precount_tokens: int | None = None
 
 
 def call_model(settings, **_request) -> GatewayResult:
@@ -130,7 +131,7 @@ def generate_json(repo, step, prompt: str, schema: type[BaseModel], *, input_lim
             _pace_local(repo.settings)
             count = client.models.count_tokens(model=target_model, contents=contents).total_tokens
             if type(count) is not int or count < 0: return GatewayResult(error_code="PRECOUNT_UNAVAILABLE")
-            if count > input_limit: return GatewayResult(error_code="CONTEXT_LIMIT")
+            if count > input_limit: return GatewayResult(error_code="CONTEXT_LIMIT", context_precount_tokens=count)
             step = step.model_copy(update={"context_precount_tokens": count, "input_snapshot": snapshot,
                 "input_hash": content_hash(snapshot) if "generation_config" in snapshot else content_hash(contents), "model_id": target_model})
             _pace_local(repo.settings)

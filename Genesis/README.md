@@ -2,6 +2,16 @@ The [bulk learning and batch guide](docs/bulk-learning-batches.md) covers the ne
 
 # AML Insight — Genesis
 
+The main local UI now reads the selected **3,000-case / 200-identity Firestore baseline**, including 2,000 reference/advisory cases and 1,000 reserved cases. Historical source-corpus counts are not current workspace totals. See [active baseline setup and boundaries](docs/baseline-workspace.md); use the Vite source preview on port 5173 for these changes. No production build was made.
+
+Evolution's matrix separates simulated analyst projections, original reference outcomes and genuine human reviews. The [2,000-case projection walkthrough](docs/projected-analyst-baseline.md) explains the generated 75/20/5 split. This simulated training run found no supported cutoff change and does not create human verification or alter operational policies.
+
+The current local code queue CI-001–CI-009 is tracked in [docs/code-improvements.md](docs/code-improvements.md). Python npm commands use the portable Node launcher; emulator and cloud tool wrappers still require PowerShell. Current source verification does not run a production build or deploy services.
+
+Cloud sign-in now offers individually entered email/password alongside Google. Local fixture credentials remain emulator-only. The separate stored-login shortcut is disabled by default and intended only for verified private staging; it returns a token rather than filling a browser password. Secret creation, IAM, mounting and deployed acceptance remain pending. See [the private-staging login checklist](docs/operator-staging-login.md).
+
+The active baseline has 30 genuine Gemini advisory reviews and 1,970 separately labeled coding-agent drafts, with 1,000 cases reserved. Drafts are not Gemini output, human feedback, full investigations or evidence of improved operational cutoffs. No additional model calls were made to import them.
+
 This is the project root. All application code, dependencies, configuration, tools, environments and build output belong here. The parent `context` directory contains local design references; do not publish its internal source materials.
 
 ## Run the local application

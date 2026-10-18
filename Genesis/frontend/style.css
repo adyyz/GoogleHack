@@ -158,6 +158,12 @@ fieldset{border:0;padding:0;margin:0;min-width:0}fieldset:disabled{opacity:.65}
 .batch-toolbar{padding-bottom:22px;margin-bottom:22px;border-bottom:1px solid var(--color-border)}
 .batch-toolbar>.eyebrow{display:block;margin-top:16px}.batch-toolbar .form-field{margin-top:18px}
 .bulk-table td:last-child{min-width:180px}.bulk-table td:last-child>.secondary{display:flex;margin-top:10px}
+.bulk-table th:nth-child(4){min-width:330px}.bulk-table td:nth-child(4){padding-inline:10px}
+.bulk-state{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.bulk-table th:nth-child(2),.bulk-table td:nth-child(2),.bulk-table th:nth-child(3),.bulk-table td:nth-child(3){text-align:center;vertical-align:middle}
+.bulk-table th:nth-child(3),.bulk-table td:nth-child(3){min-width:170px}
+.bulk-source-risk{display:flex;flex-direction:column;align-items:center;gap:8px}
+.bulk-source-risk .badge{display:inline-block;max-width:100%;white-space:normal;overflow-wrap:normal;line-height:1.5}
 .bulk-table td:first-child>.secondary{justify-content:flex-start;text-align:left;white-space:normal}
 .reference-overview{border-top:3px solid var(--color-primary)}.reference-overview table{min-width:720px}
 .reference-overview caption{text-align:left;padding:12px 0;color:var(--color-muted)}
@@ -216,7 +222,9 @@ table thead{position:static;z-index:auto}
 table tbody th{border-top:1px solid #edf0f5}
 .matrix-rule-label{display:grid;justify-items:start;align-content:start;gap:8px;min-width:0;max-width:100%}
 .matrix-rule-label>.text-button{max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere}
-.matrix-rule-label>.category-chip{margin:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.matrix-rule-label>.category-chip{margin:0;max-width:100%}
+.category-chip{white-space:nowrap;overflow-wrap:normal}
+.rule-catalog th:nth-child(2),.rule-catalog td:nth-child(2){width:9rem;white-space:nowrap}
 
 /* Evolution follows the evidence-to-policy sequence in normal document flow. */
 .evo-scope{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}

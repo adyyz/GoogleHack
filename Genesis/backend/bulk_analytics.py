@@ -19,12 +19,12 @@ def pages(repo, collection, filters=(), size=500, *, dataset_id=ID):
         if not cursor: break
 
 
-def usage(repo, operator_summary=False, *, dataset_id=ID):
+def usage(repo, operator_summary=False, *, dataset_id=ID, source_pages=None):
     """Reduce bounded ledger pages. Unknown categories remain unknown."""
     totals, known, reported = Counter(), Counter(), set()
     chart = True; categories = Counter()
     failures = retries = duration_total = duration_count = 0
-    for rows in pages(repo, "step_runs", dataset_id=dataset_id):
+    for rows in source_pages if source_pages is not None else pages(repo, "step_runs", dataset_id=dataset_id):
         if operator_summary:
             failures += sum(row["state"] in {"FAILED", "UNKNOWN_OUTCOME"} for row in rows)
             retries += sum(row.get("attempt_number", 1) > 1 for row in rows)
@@ -54,14 +54,29 @@ class AnalyticsRepository(Repository):
     def __init__(self, settings): super().__init__(settings, ID)
 
     def operational_case(self, case_id):
+        if hasattr(self, "workspace"):
+            from .bulk_jobs import BulkRepository
+            return BulkRepository(self.settings, case_id, self.dataset_id, self.db).operational_case(case_id)
         from .bulk_jobs import BulkRepository
         return BulkRepository(self.settings, case_id).operational_case(case_id)
 
     def operational_case_ids(self):
+        if hasattr(self, "workspace"):
+            from .baseline_workspace import rows
+            return {row["id"] for row in rows(self, self.workspace)}
         with corpus().connect() as db:
             return {row[0] for row in db.execute("SELECT id FROM cases WHERE partition='PENDING'")}
 
     def operational_rows(self):
+        if hasattr(self, "workspace"):
+            from .baseline_workspace import rows
+            sources = rows(self, self.workspace)
+            cases = [{"id": row["id"], "customer_id": row["identity_id"], "split": "CALIBRATION_DISCOVERY"} for row in sources]
+            customers = {row["identity_id"]: {"id": row["identity_id"], "customer_type": row["customer_type"]} for row in sources}
+            ids = {row["id"] for row in cases}
+            records = [[row for page in pages(self, collection, dataset_id=self.dataset_id) for row in page if row.get("case_id") in ids]
+                for collection in ("alerts", "feedback_events", "step_runs")]
+            return cases, list(customers.values()), *records
         with corpus().connect() as db:
             sources = list(db.execute("SELECT id,identity_id,customer_type FROM cases WHERE partition='PENDING'"))
         cases = [{"id": row["id"], "customer_id": row["identity_id"], "split": "CALIBRATION_DISCOVERY"} for row in sources]
@@ -73,12 +88,22 @@ class AnalyticsRepository(Repository):
         return cases, list(customers.values()), alerts, feedback, steps
 
     def source_alert_counts(self):
+        if hasattr(self, "workspace"):
+            from .baseline_workspace import rows
+            sources = rows(self, self.workspace)
+            return {rule: sum(rule in row["rules"] for row in sources) for rule in RULES}
         with corpus().connect() as db:
             return dict(db.execute("SELECT rule_id,count(*) FROM case_rules JOIN cases ON cases.id=case_rules.case_id WHERE partition='PENDING' GROUP BY rule_id"))
 
     def review_statistics(self, rows=None):
         from .review_metrics import review_summary
         result = review_summary(*(rows or self.operational_rows()))
+        if hasattr(self, "workspace"):
+            result.update(scope="ACTIVE_BASELINE_GENUINE_REVIEWS", dataset_id=self.dataset_id,
+                total_cases=self.workspace["cases"], total_identities=self.workspace["identities"],
+                operational_cases=self.workspace["reserved_cases"], reserved_cases=self.workspace["reserved_cases"], total_alerts=sum(self.source_alert_counts().values()),
+                note="Genuine human reviews in the active Firestore baseline only. Gemini advisories, agent drafts and synthetic references are excluded. Agreement is not population accuracy or FPR.")
+            return result
         result.update(scope="BULK_GENUINE_REVIEWS", total_cases=40000, total_identities=500,
             operational_cases=20000, total_alerts=sum(self.source_alert_counts().values()),
             note="Genuine human reviews from the 20,000 operational cases in the 40,000-case corpus. Training references and sealed validation are excluded. Agreement is not population accuracy or FPR.")
@@ -94,7 +119,7 @@ class AnalyticsRepository(Repository):
                 raise Conflict("Frozen evidence chunk changed")
             for item in chunk["references"]:
                 event = self.get("feedback_events", item["id"])
-                if (not event or event.get("dataset_id") != ID or event.get("provenance") != "HUMAN_OPERATOR"
+                if (not event or event.get("dataset_id") != self.dataset_id or event.get("provenance") != "HUMAN_OPERATOR"
                     or content_hash(event) != item["hash"] or event["triage_run_id"] != item["run_id"] or event["alert_id"] != item["alert_id"]):
                     raise Conflict("Frozen bulk review changed")
                 events.append(event)
@@ -109,7 +134,7 @@ class AnalyticsRepository(Repository):
     def observed_effects(self, limit=50, cursor=None):
         from .calibration import active_label_policy
         policy = active_label_policy(self)
-        page = self.page("auto_label_candidates", limit, cursor, [("dataset_id", ID)], order="applied_at")
+        page = self.page("auto_label_candidates", limit, cursor, [("dataset_id", self.dataset_id)], order="applied_at")
         candidates = page["items"]
         events = self.list("feedback_events")
         assessments = self.list("auto_label_assessments")
@@ -138,15 +163,14 @@ class AnalyticsRepository(Repository):
         reviewed_cases = set()
         metric_totals, metric_groups = Counter(), defaultdict(lambda: defaultdict(Counter))
         cutoff = now()
-        for events in pages(self, "feedback_events"):
+        for events in pages(self, "feedback_events", dataset_id=self.dataset_id):
             references = []
             for event in events:
                 if event["submitted_at"] > cutoff: continue
                 if event.get("provenance") != "HUMAN_OPERATOR": raise Conflict("Bulk analytics accepts genuine human reviews only")
-                worker = BulkRepository(self.settings, event["case_id"])
-                worker.db = self.db
+                worker = BulkRepository(self.settings, event["case_id"], self.dataset_id, self.db)
                 alert = worker.get("alerts", event["alert_id"]); run = worker.get("pipeline_runs", event["triage_run_id"])
-                if not alert or alert["dataset_id"] != ID or not run or run["dataset_id"] != ID or run["state"] != "COMPLETE" or run["alert_id"] != alert["id"]:
+                if not alert or alert["dataset_id"] != self.dataset_id or not run or run["dataset_id"] != self.dataset_id or run["state"] != "COMPLETE" or run["alert_id"] != alert["id"]:
                     raise Conflict("Bulk feedback lineage failed")
                 @firestore.transactional
                 def chain(tx): return worker._sealed_chain(tx, run)
@@ -172,7 +196,7 @@ class AnalyticsRepository(Repository):
                     data = worker.load_dataset(); customers.update({k: v.model_dump() for k, v in data.customers.items()})
             if references:
                 chunk_id = content_hash(references)
-                try: self.create("bulk_evidence_chunks", chunk_id, {"dataset_id": ID, "references": references})
+                try: self.create("bulk_evidence_chunks", chunk_id, {"dataset_id": self.dataset_id, "references": references})
                 except AlreadyExists:
                     if self.get("bulk_evidence_chunks", chunk_id)["references"] != references: raise Conflict("Evidence chunk changed")
                 chunks.append({"id": chunk_id, "count": len(references)})
@@ -183,6 +207,9 @@ class AnalyticsRepository(Repository):
         computed.update(total_cases=40000, demo_cases=0, total_identities=500, operational_cases=20000, total_alerts=sum(self.source_alert_counts().values()),
             reviewed_cases=len(reviewed_cases), reviewed_alerts=total, true_positive=counts["TRUE_POSITIVE"],
             false_positive=counts["FALSE_POSITIVE"], inconclusive=counts["INCONCLUSIVE"], scope="BULK_GENUINE_REVIEWS")
+        if hasattr(self, "workspace"):
+            computed.update(total_cases=self.workspace["cases"], total_identities=self.workspace["identities"],
+                operational_cases=self.workspace["reserved_cases"], scope="ACTIVE_BASELINE_GENUINE_REVIEWS")
         computed.update(dict(metric_totals))
         computed["agreement_rate"] = metric_totals["agreed"] / metric_totals["compared"] if metric_totals["compared"] else None
         computed["groups"] = {dimension: [{"name": name, **dict(values),
@@ -190,7 +217,7 @@ class AnalyticsRepository(Repository):
             for dimension, grouped in metric_groups.items()}
         computed["signal_codes"] = [row["name"] for row in computed["groups"].get("signal", [])]
         body = analytical_inputs(corpus().manifest["manifest_hash"], examples, sample_steps, sample_alerts, computed)
-        accounting = usage(self)
+        accounting = usage(self, dataset_id=self.dataset_id)
         body["sample_sizes"].update(succeeded_steps=accounting.pop("succeeded_rows", 0), usage_steps=accounting.pop("ledger_rows", 0))
         body["sample_sizes"].update(feedback_events=total, reviewed_alerts=total, conclusive_reviews=conclusive, inconclusive_reviews=counts["INCONCLUSIVE"])
         body.update(bulk_reference_chunks=chunks, feedback_examples_omitted=total - len(examples),
@@ -201,7 +228,7 @@ class AnalyticsRepository(Repository):
         body["pattern_memory"] = [{"rule_id": key[0], "typology": key[1], "detector_policy_id": key[2],
             "support_feedback_ids": sorted(ids), "support_strength": min(len(ids) / 15, 1), "status": "ACTIVE"} for key, ids in sorted(patterns.items())]
         ident = content_hash(body)
-        try: self.create("analytical_snapshots", ident, {"dataset_id": ID, "content_hash": ident, "body": body, "created_by": actor})
+        try: self.create("analytical_snapshots", ident, {"dataset_id": self.dataset_id, "content_hash": ident, "body": body, "created_by": actor})
         except AlreadyExists: pass
         self.record_patterns(ident)
         return self.get("analytical_snapshots", ident)
