@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+LOCAL_FREE_MODELS = frozenset({"gemini-3.5-flash-lite", "gemini-3-flash-preview"})
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -44,7 +46,7 @@ class Settings:
 
     def local_gemini_valid(self):
         return (self.mode == "local" and self.project_id == "demo-aml-insight" and self.local_gemini_enabled
-            and self.local_gemini_free_verified and self.local_gemini_model == "gemini-3.5-flash-lite"
+            and self.local_gemini_free_verified and self.local_gemini_model in LOCAL_FREE_MODELS
             and bool(os.getenv("GEMINI_API_KEY")) and self.local_gemini_verified_until is not None
             and self.local_gemini_verified_until > datetime.now(timezone.utc))
 
@@ -59,7 +61,7 @@ class Settings:
 
     def is_model_authorized(self, model_id: str, leg_id: str | None = None) -> bool:
         if self.mode == "local":
-            return model_id == self.active_model_id and (not self.local_gemini_enabled or model_id == "gemini-3.5-flash-lite")
+            return model_id == self.active_model_id and (not self.local_gemini_enabled or model_id in LOCAL_FREE_MODELS)
         return (model_id == self.model_id == self.verified_cloud_model_id and bool(model_id)
             and bool(re.fullmatch(r"global|[a-z]+(?:-[a-z]+)+[0-9]+", self.verified_cloud_location)))
 
@@ -122,6 +124,7 @@ class Settings:
             verified_cloud_location=os.getenv("VERIFIED_CLOUD_LOCATION", ""),
             firebase_web_api_key=os.getenv("FIREBASE_WEB_API_KEY", "").strip(),
             verified_rate_card_json=os.getenv("VERIFIED_RATE_CARD_JSON", ""), deployed_code_fingerprint=source_fingerprint,
-            agent_profiles_json=os.getenv("AGENT_PROFILES_JSON", ""))
+            agent_profiles_json=os.getenv("AGENT_PROFILES_JSON", ""),
+            local_gemini_model=os.getenv("LOCAL_GEMINI_MODEL", "gemini-3.5-flash-lite"))
         settings.agent_profiles  # Explicit invalid configuration must not silently select defaults.
         return settings

@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "status": "LOCAL_VERIFICATION_ONLY",
-  "recorded_at": "2026-10-17T16:38:33.867379+00:00",
+  "recorded_at": "2026-10-18T00:41:53.065549+00:00",
   "source": {
-    "base_revision": "887e901ac2c7ace8894dc8b70a8e87a2295e1131",
+    "base_revision": "3b6357437b66f87b933989d8492a5b591e3b9689",
     "uncommitted_worktree": true,
-    "code_fingerprint": "8cacba49b88ce5d1578a95869ce0795562b04d41d62b1cfb7ce8aeaf8150f31d",
+    "code_fingerprint": "4f0b3f719ea98955e8234dacadbe289f96b86f89b2745162d1ca2defb173238b",
     "release_revision": null
   },
   "local_provenance": {
@@ -14,9 +14,9 @@
     "dataset_id": "synthetic-v1-20261015",
     "manifest_hash": "9f297c1dd06ef395d9dad851348d15c5ffa4db95cedb49dc4ad7b5b36130dfa0",
     "baseline_bundle_id": "c9e0cc573811c63b9534985b91134670c3dc3a9b941616734348255fd41a4ac7",
-    "publication_id": "52ea3d2774794c28a78b9f7753799e9b",
-    "code_fingerprint": "8cacba49b88ce5d1578a95869ce0795562b04d41d62b1cfb7ce8aeaf8150f31d",
-    "private_routes_checked": 46,
+    "publication_id": "d36f460770024d868fbafffedad67aa4",
+    "code_fingerprint": "4f0b3f719ea98955e8234dacadbe289f96b86f89b2745162d1ca2defb173238b",
+    "private_routes_checked": 63,
     "human_feedback_events": 0,
     "genuine_model_results_created": 0,
     "candidate_freezes_created": 0,
@@ -24,18 +24,18 @@
   },
   "checks": {
     "unit": {
-      "total": 124,
-      "passed": 108,
-      "skipped": 16,
+      "total": 134,
+      "passed": 114,
+      "skipped": 20,
       "failed": 0,
-      "artifact_hash": "be218d972fda7a8cf495076246ddaa7db8ef79c70f5869658a052e6e1771524a"
+      "artifact_hash": "884a9f34d741f67e6ed92acfa9e143380a53c6730fc5a11b300c9c26ed269454"
     },
     "emulator_integration": {
-      "total": 16,
-      "passed": 16,
+      "total": 20,
+      "passed": 20,
       "skipped": 0,
       "failed": 0,
-      "artifact_hash": "414513ff4421f83b1d741109cfab1bda50e759e84c71dda77ade4e8d27ede4b2"
+      "artifact_hash": "10b723a4c7e79507cabd45400556cbc2a108ef1a1e1a2fe2c43b155ada9e6162"
     }
   },
   "dependencies": {

@@ -32,7 +32,10 @@ def test_worker_requires_verified_task_identity_before_claiming(monkeypatch):
     certs = SimpleNamespace(status=200, data=json.dumps({"unit-only": public.decode()}).encode())
     monkeypatch.setattr("backend.worker.GoogleRequest", lambda: lambda *_args, **_kwargs: certs)
     seen = []
-    repo = SimpleNamespace(claim_delivery=lambda *args: (seen.append(args) or {"status": "TERMINAL", "lease": None}))
+    from backend.bulk_dataset import ID
+    record = {"dataset_id": ID, "kind": "EVOLUTION"}
+    repo = SimpleNamespace(settings=settings, get=lambda *_args: record, claim_delivery=lambda *args: (seen.append(args) or {"status": "TERMINAL", "lease": None}))
+    monkeypatch.setattr("backend.bulk_analytics.AnalyticsRepository", lambda _settings: repo)
     monkeypatch.setattr("backend.worker.Repository", lambda _settings: repo)
     client = TestClient(create_app(settings))
     body = {"run_id": "a" * 24, "generation": 1}
@@ -61,6 +64,10 @@ def test_worker_requires_verified_task_identity_before_claiming(monkeypatch):
     response = client.post("/internal/jobs", json=body, headers=headers())
     assert response.status_code == 200 and response.json() == {"status": "TERMINAL"}
     assert response.headers["cache-control"] == "no-store" and len(seen) == 1
+    record["dataset_id"] = "synthetic-v1-20261015"
+    assert client.post("/internal/jobs", json=body, headers=headers()).status_code == 404
+    assert len(seen) == 1
+    record["dataset_id"] = ID
     repo.claim_delivery = lambda *_args: {"status": "BUSY", "lease": None}
     assert client.post("/internal/jobs", json=body, headers=headers()).status_code == 503
     assert client.get("/docs").status_code == 404 and client.get("/api/demo/cases").status_code == 404

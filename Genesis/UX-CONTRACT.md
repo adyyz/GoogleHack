@@ -1,5 +1,21 @@
 # AML Insight UI contract
 
+## Seeded history practice
+
+An active practice baseline can restrict work to 2,000 preprocessing cases while reserving 1,000 from different identities. Show the active allocation and actual Gemini advisory count first. Preserved 10,000-case history and earlier full investigations have separate labels. Never present an advisory review as a full investigation, analyst verdict or qualifying genuine calibration observation. Reserved cases are excluded server-side from both preprocessing workers.
+
+The read-only seeded-history panel belongs inside synthetic practice. Its reference reviews remain visibly simulated, separate from genuine human metrics. Actual AI completion and failures come from the ledger; importing a reference never marks an investigation complete. Refresh is explicit. Reads never submit model work or change policies. Genuine model/reference comparisons show distinct case and identity counts and are not labeled human agreement.
+
+## Corpus Evolution story — 18 October 2026
+
+The main Evolution journey reads genuine corpus evidence only. Live review summaries and matrix counts describe the 20,000 operational cases within the 40,000-case source corpus; frozen A5 reports describe their own immutable sample. Synthetic walkthroughs and reference labels never enter genuine review counts, calibration gates or prospective validation. Earlier Demo/Discovery controls and API routes are removed. Stored historical records remain immutable and inaccessible through operational APIs.
+
+The page follows Outcomes → Understand → Learn → Apply → Observe. Jump buttons only scroll and focus the corresponding heading; they do not clear notes, change selection, fetch a different report or write data. Report and snapshot changes, screen navigation and supporting investigations reuse the shared dirty-form guard. Current corpus forms have unique IDs and dirty ownership. No sensitive state enters URLs or browser storage.
+
+Corpus A0 policies, pending candidates, assessments and audit records are dataset-scoped. New corpus parents pin the selected corpus policy; previous runs and human decisions remain unchanged. Approval, application, rollback, reassessment and restoration remain explicit, confirmed actions. Only cutoff changes are actionable in the main journey. A5 is a separately confirmed model request; merely opening or refreshing Evolution sends none. Deterministic candidate preparation reads every eligible frozen review, independent of the bounded examples sent to A5.
+
+Observation separates training, prospective validation, explicit label reassessment and subsequent human reviews. Absence of post-application reviews is “Not yet observed”; none of these metrics establishes causal production improvement. Aggregate publication uses its own corpus pointer, explicit preview/confirmation and withdrawal. Public visitors cannot read individual records or learning controls.
+
 ## Identity review and operator-approved detector policies — 18 October 2026
 
 Identity type and identity filters are native selects owned by the existing form-field styling. Filters and search operate on the same case set; selection stays within visible results. Changing filters, cases, alerts, recommendation selection or screens uses App's unsaved-note guard. The queue shows linked source identity/account, the full available 90-day transaction trail and counts awaiting triage/review or frozen. Customer type is a source attribute, not an AI identity-verification claim.
@@ -120,3 +136,14 @@ InvestigationBrief owns an ordered evidence-to-action narrative: Overview, Key f
 ### Case stage status
 
 The same connected four-stage trail is visible to both roles. Public visitors receive source/risk status and locked private AI/review stages, never inferred per-case operator results. Operators see case-wide completion for applicable, frozen or in-progress alerts; individual alert review remains separately labeled. A case-run completion refreshes sibling statuses from the operator queue without polling or unmounting the review form. Frozen feedback updates its check immediately and remains immutable.
+
+
+### Bulk case batches and synthetic learning
+
+Workspace and combined-filter changes use the shared dirty-note guard. Async reads are aborted on scope/selection changes and session ownership guards late private results. Public computations stay in tab memory and never create provider/human evidence. Operator starts require preview and a stable idempotency key through submission retries; progress refresh is explicit. Native confirmation dialogs handle pause/resume/cancel and synthetic decisions with revisions. Continuing failed members requires explicit acknowledgement and does not retry their unknown attempts. Four cards label transaction/case/alert/review units and their own scope/denominators. Validation is frozen and opened once, and simulation policy application never changes genuine policies.
+
+
+Unified queue revision: preloaded 10,000-case reference evaluation (25% of corpus) is separate from genuine provider and human evidence. The same queue offers reference / pending / awaiting-review / frozen filters, with actual counts and overlapping rule denominators. Start a 10- or 100-case batch at the top; reference cases are excluded from genuine enqueue. Review opens the canonical native dialog; dirty notes guard closing, frozen feedback remains immutable, failed saves preserve notes and focus restores to the queue action. Changing screens, rows or filters retains existing dirty-form protection. No new persistent browser state or identity URLs.
+
+
+Controlled cutoff exercise: operator-only and local-emulator-only. The real cutoff fitter/application code runs against separate prefixed collections, with 40 fixed training, 20 independent validation and 100 later test observations. Explicit confirmation owns prepare, validate, approve, reject, apply and comparison. Approval requires a passing validation; apply requires approval; test requires the applied policy. Repeated preparation/comparison returns existing records. Version conflicts preserve state and require refresh. No corpus/operational policy, genuine feedback or attempt ledger is written. Controlled success is identified as fixture behavior, never actual predictive improvement. Corpus records without a candidate cannot open validation, approve or apply; historical records remain unchanged.

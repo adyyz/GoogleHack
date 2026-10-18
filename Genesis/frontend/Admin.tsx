@@ -19,9 +19,9 @@ export function Admin({ token, isAdmin, canEnable, onError, onRun }: { token: st
   const limitRef = React.useRef<HTMLInputElement>(null);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError('');
-    Promise.all([request<OperatorUsage>('/api/operator/usage', token, { signal: controller.signal }),
-      request<Page<RunSummary>>('/api/operator/runs', token, { signal: controller.signal }),
-      request<Page<AuditEvent>>('/api/operator/audit', token, { signal: controller.signal })])
+    Promise.all([request<OperatorUsage>('/api/operator/usage?scope=corpus', token, { signal: controller.signal }),
+      request<Page<RunSummary>>('/api/operator/runs?scope=corpus', token, { signal: controller.signal }),
+      request<Page<AuditEvent>>('/api/operator/audit?scope=corpus', token, { signal: controller.signal })])
       .then(([summary, recent, events]) => { if (!controller.signal.aborted) { setUsage(summary); setRuns(recent); setAudit(events); setLimit(String(summary.daily.limit)); setEnabled(summary.daily.live_enabled); } })
       .catch(error => { if (!controller.signal.aborted) { setError('Admin data could not be loaded. Refresh to try again.'); onError(error); } })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -49,12 +49,13 @@ export function Admin({ token, isAdmin, canEnable, onError, onRun }: { token: st
     if (!page.next_cursor || loading) return;
     setLoading(true);
     try {
-      const next = await request<Page<RunSummary> & Page<AuditEvent>>(`/api/operator/${kind}?cursor=${encodeURIComponent(page.next_cursor)}`, token);
+      const next = await request<Page<RunSummary> & Page<AuditEvent>>(`/api/operator/${kind}?scope=corpus&cursor=${encodeURIComponent(page.next_cursor)}`, token);
       if (kind === 'runs') setRuns(previous => ({ ...next, items: [...previous.items, ...next.items] }));
       else setAudit(previous => ({ ...next, items: [...previous.items, ...next.items] }));
     } catch (error) { onError(error); } finally { setLoading(false); }
   }
   return <><section className="panel"><div className="panel-heading"><h2>Operational usage</h2><button className="text-button" disabled={loading || saving} onClick={() => setRefresh(value => value + 1)}>Refresh admin data</button></div>
+    <p className="muted">Usage and histories cover the current 40,000-case corpus. Daily call controls apply to all attempts.</p>
     {loading && <p role="status">Loading operational data…</p>}{error && <p className="error" role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     {usage && <><UsageDisplay usage={usage} /><dl className="usage-values"><dt>Provider attempts</dt><dd>{usage.provider_attempts}</dd><dt>Failed steps</dt><dd>{usage.failed_attempts}</dd><dt>Retries</dt><dd>{usage.retry_count}</dd><dt>Mean step latency</dt><dd>{usage.mean_duration_ms === null ? 'Unavailable' : `${Math.round(usage.mean_duration_ms)} ms`}</dd><dt>Daily attempt reservations</dt><dd>{usage.daily.attempts_reserved} / {usage.daily.limit}</dd><dt>UTC control day</dt><dd>{usage.daily.day_utc}</dd><dt>Live AI</dt><dd>{usage.daily.live_enabled ? 'Enabled' : 'Disabled'}</dd></dl>
       {isAdmin ? <form noValidate onSubmit={submit}><h3>Daily AI controls</h3><p>Changes apply to the next attempt. A new UTC day starts disabled.</p>

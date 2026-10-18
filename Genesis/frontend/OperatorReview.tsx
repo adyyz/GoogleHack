@@ -4,7 +4,7 @@ import { Icon } from './Icon';
 import { request } from './api';
 import type { CaseRecord, Finding, PrivateAlert, FeedbackEvent, Page, RunDetail } from './types';
 
-export function OperatorReview({ current, token, version, onError, onDirty, navigate, onRun, onComplete, onStatus, initialAlert }: { current: CaseRecord; token: string; version: number; onError: (error: unknown) => void; onDirty: (dirty: boolean) => void; navigate: (action: () => void) => void; onRun: (id: string) => void; onComplete: (run: RunDetail) => void; onStatus: (alert: PrivateAlert['alert']) => void; initialAlert?: string }) {
+export function OperatorReview({ current, token, version, onError, onDirty, navigate, onRun, onComplete, onStatus, initialAlert, variant = 'full' }: { current: CaseRecord; token: string; version: number; onError: (error: unknown) => void; onDirty: (dirty: boolean) => void; navigate: (action: () => void) => void; onRun: (id: string) => void; onComplete: (run: RunDetail) => void; onStatus: (alert: PrivateAlert['alert']) => void; initialAlert?: string; variant?: 'full' | 'analysis' | 'review' }) {
   const [selected, setSelected] = useState(current.alerts.find(alert => alert.id === initialAlert)?.id || current.alerts[0]?.id || '');
   const [detail, setDetail] = useState<PrivateAlert | null>(null);
   const [frozenSelection, setFrozenSelection] = useState('');
@@ -23,7 +23,7 @@ export function OperatorReview({ current, token, version, onError, onDirty, navi
   const frozen = (detail?.alert.feedback_revision || 0) > 0 || frozenSelection === selected;
   const machineLabel = detail?.effective_assessment?.body.predicted_verdict || detail?.outputs.A0?.predicted_verdict;
   const suggestion = machineLabel === 'AUTO_TP' ? 'TRUE_POSITIVE' : machineLabel === 'AUTO_FP' ? 'FALSE_POSITIVE' : machineLabel === 'AUTO_UNCERTAIN' ? 'INCONCLUSIVE' : undefined;
-  useEffect(() => { onDirty(!frozen && (!!notes || override !== '' || verdict !== 'INCONCLUSIVE')); }, [notes, override, verdict, frozen, onDirty]);
+  useEffect(() => { onDirty(variant !== 'analysis' && !frozen && (!!notes || override !== '' || verdict !== 'INCONCLUSIVE')); }, [notes, override, verdict, frozen, onDirty]);
   useEffect(() => { setFrozenSelection(''); setNotes(''); setOverride(''); setVerdict('INCONCLUSIVE'); setMessage(''); setFieldError(''); }, [selected, token]);
   useEffect(() => {
     const controller = new AbortController();
@@ -68,22 +68,22 @@ export function OperatorReview({ current, token, version, onError, onDirty, navi
     } catch (error) { onError(error); } finally { setLoading(false); }
   }
   if (!token || !current.alerts.length) return null;
-  return <section className="panel operator-review"><div className="panel-heading"><h3>Private alert status</h3><button className="text-button" disabled={loading} onClick={() => setRefresh(refresh + 1)}>Refresh status</button></div>
+  return <section className="panel operator-review"><div className="panel-heading"><h3>Private alert status</h3><button className="secondary" disabled={loading} onClick={() => setRefresh(refresh + 1)}>Refresh status</button></div>
     <label htmlFor="review-alert">Selected alert</label><select id="review-alert" value={selected} disabled={saving} onChange={event => { const id = event.target.value; navigate(() => setSelected(id)); }}>{current.alerts.map(alert => <option key={alert.id} value={alert.id}>{alert.rule_name}</option>)}</select>
     {loading ? <p role="status">Loading private alert…</p> : detail && <><p>Alert: {detail.alert.status}. Latest run: {detail.latest_run?.state || 'Not run'}.</p>{detail.latest_run?.error_code && <p role="status">{detail.latest_run.error_code}: {detail.latest_run.error_code === 'AI_NOT_CONNECTED' ? 'Live access was unavailable for a step. Inspect the sealed steps for any earlier outcomes.' : 'Check the stored run details before continuing.'}</p>}</>}
-    {detail?.latest_run?.parent_run_id && <button className="text-button" onClick={() => onRun(detail.latest_run!.parent_run_id!)}>View run usage</button>}
-    {detail && <AgentTrace detail={detail} />}
-    {complete && detail && <ValidatedInvestigation detail={detail} current={current} />}
-    <div className="review-section-heading"><span className="eyebrow">DECIDE</span><h3><span aria-hidden="true">📝 </span>Analyst review</h3></div><p id="feedback-gate">{frozen ? 'Your verdict is frozen. Choose another alert or identity to continue.' : complete ? 'Save feedback once to freeze your final verdict for this alert.' : 'A completed, validated AI investigation is required before feedback.'}</p>
+    {variant !== 'review' && detail?.latest_run?.parent_run_id && <button className="secondary" onClick={() => onRun(detail.latest_run!.parent_run_id!)}>View run usage</button>}
+    {variant !== 'review' && detail && <AgentTrace detail={detail} />}
+    {variant !== 'review' && complete && detail && <ValidatedInvestigation detail={detail} current={current} />}
+    {variant !== 'analysis' && <><div className="review-section-heading"><span className="eyebrow">DECIDE</span><h3><span aria-hidden="true">📝 </span>Analyst review</h3></div><p id="feedback-gate">{frozen ? 'Your verdict is frozen. Choose another alert or identity to continue.' : complete ? 'Save feedback once to freeze your final verdict for this alert.' : 'A completed, validated AI investigation is required before feedback.'}</p>
     {frozen ? <article className="frozen-review" aria-label="Saved analyst verdict"><div><span className="stage-complete"><Icon name="check" size={15} /> Saved and frozen</span><strong>{verdict.replaceAll('_', ' ').toLowerCase()}</strong></div><details><summary>View saved review</summary><p>{history.items[0]?.notes || notes}</p>{history.items[0]?.override_action && <p><strong>Action override:</strong> {history.items[0].override_action?.toLowerCase()}</p>}</details></article> : <form noValidate onSubmit={submit} aria-describedby="feedback-gate"><fieldset disabled={!complete || frozen || saving || loading}>
-      {suggestion && <div className="dialog-actions"><button className="text-button" type="button" onClick={() => setVerdict(suggestion)}>Agree with AI suggestion</button><button className="text-button" type="button" onClick={() => { setVerdict('INCONCLUSIVE'); document.getElementById('review-verdict')?.focus(); }}>Choose my own verdict</button></div>}
+      {suggestion && <><p><strong>Machine suggestion:</strong> {machineLabel?.replaceAll('_', ' ').toLowerCase()} / heuristic score {detail?.effective_assessment?.body.heuristic_score ?? detail?.outputs.A0?.heuristic_score ?? 'Not recorded'}. This is not a calibrated probability.</p><div className="dialog-actions"><button className="secondary" type="button" onClick={() => setVerdict(suggestion)}><span aria-hidden="true">🤝 </span>Agree with AI suggestion</button><button className="secondary" type="button" onClick={() => { setVerdict('INCONCLUSIVE'); document.getElementById('review-verdict')?.focus(); }}><span aria-hidden="true">📝 </span>Choose my own verdict</button></div></>}
       <div className="form-field"><label htmlFor="review-verdict">Verdict</label><select id="review-verdict" value={verdict} onChange={event => setVerdict(event.target.value)}><option value="INCONCLUSIVE">Inconclusive</option><option value="TRUE_POSITIVE">True positive</option><option value="FALSE_POSITIVE">False positive</option></select></div>
       <div className="form-field"><label htmlFor="review-notes">Review notes</label><textarea className="resize-none" id="review-notes" ref={notesRef} rows={5} maxLength={2000} required value={notes} aria-invalid={!!fieldError} aria-describedby={fieldError ? 'review-notes-error' : undefined} onChange={event => setNotes(event.target.value)} />{fieldError && <span id="review-notes-error" className="field-error">{fieldError}</span>}</div>
       <div className="form-field"><label htmlFor="review-override">Action override (optional)</label><select id="review-override" value={override} onChange={event => setOverride(event.target.value)}><option value="">No override</option>{['ESCALATE', 'REVIEW', 'MONITOR', 'CLOSE'].map(action => <option key={action}>{action}</option>)}</select></div>
       <button className="primary" disabled={!complete || frozen || saving || loading} aria-busy={saving}>Save feedback</button>
     </fieldset></form>}{message && <p role="status">{message}</p>}
     <h3>Feedback history</h3>{history.items.length ? <ol className="feedback-history" tabIndex={0} aria-label="Feedback history">{history.items.map(event => <li key={event.id}><strong>{event.verdict.replaceAll('_', ' ').toLowerCase()}</strong><p>{event.notes}</p><small>Revision {event.revision} · {event.provenance} · {new Date(event.submitted_at).toLocaleString('en-AU', { timeZone: 'UTC' })} UTC</small></li>)}</ol> : <p className="muted">No feedback recorded for this alert.</p>}
-    {history.next_cursor && <button className="text-button" disabled={loading} onClick={() => void moreHistory()}>Load more feedback</button>}
+    {history.next_cursor && <button className="secondary" disabled={loading} onClick={() => void moreHistory()}>Load more feedback</button>}</>}
   </section>;
 }
 

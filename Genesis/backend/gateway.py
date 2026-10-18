@@ -3,9 +3,24 @@ from dataclasses import dataclass
 import json
 import os
 import re
-from time import monotonic
+from time import monotonic, sleep
 
 from pydantic import BaseModel, ValidationError
+
+_last_local_http_at = None
+
+
+def _pace_local(settings):
+    """One sequential local worker; cloud dispatch retains its own rate controls."""
+    global _last_local_http_at
+    if settings.mode != "local": return
+    interval = float(os.getenv("LOCAL_GEMINI_MIN_INTERVAL_SECONDS", "0"))
+    if not 0 <= interval <= 60: raise ValueError("Invalid local provider interval")
+    if not interval: return
+    if _last_local_http_at is not None:
+        delay = interval - (monotonic() - _last_local_http_at)
+        if delay > 0: sleep(delay)
+    _last_local_http_at = monotonic()
 
 
 @dataclass(frozen=True)
@@ -53,7 +68,8 @@ def _retry_delay(exc):
 
 def generate_json(repo, step, prompt: str, schema: type[BaseModel], *, input_limit: int, output_limit: int,
                   evidence: dict | None = None, model_id: str | None = None,
-                  thinking_level: str | None = None, temperature: float | None = None):
+                  thinking_level: str | None = None, temperature: float | None = None,
+                  structured_output: bool = False):
     """One explicitly authorized provider attempt; no SDK retries or fallback."""
     from .repository import Conflict, now
     from .dataset import content_hash
@@ -102,16 +118,22 @@ def generate_json(repo, step, prompt: str, schema: type[BaseModel], *, input_lim
             "thinking_config": {"thinking_level": requested.thinking_level},
             "automatic_function_calling": {"disable": True},
             **({"service_tier": "standard"} if card is not None else {})}
+        if structured_output:
+            if step.leg_id != 'EVALUATE' or not bundle.get('body', {}).get('structured_output'):
+                return GatewayResult(error_code='CONFIG_GENERATION_MISMATCH')
+            config['response_json_schema'] = schema.model_json_schema()
         if requested.temperature is not None: config["temperature"] = requested.temperature
         snapshot = {"contents": contents}
-        if "generation_profiles" in bundle.get("body", {}):
+        if structured_output or "generation_profiles" in bundle.get("body", {}):
             snapshot.update(generation_config=config, model_id=target_model)
         with _provider_client(repo.settings) as client:
+            _pace_local(repo.settings)
             count = client.models.count_tokens(model=target_model, contents=contents).total_tokens
             if type(count) is not int or count < 0: return GatewayResult(error_code="PRECOUNT_UNAVAILABLE")
             if count > input_limit: return GatewayResult(error_code="CONTEXT_LIMIT")
             step = step.model_copy(update={"context_precount_tokens": count, "input_snapshot": snapshot,
                 "input_hash": content_hash(snapshot) if "generation_config" in snapshot else content_hash(contents), "model_id": target_model})
+            _pace_local(repo.settings)
             if not repo.reserve_model_attempt(step): return GatewayResult(error_code="ATTEMPT_ALREADY_RESERVED", step_id=step.id)
             reserved = True
             response = client.models.generate_content(model=target_model, contents=contents, config=config)
@@ -153,6 +175,8 @@ def generate_json(repo, step, prompt: str, schema: type[BaseModel], *, input_lim
             accepted = repo.seal_provider_attempt(step, {**usage,
                 "state": "FAILED" if invalid or rejected else "UNKNOWN_OUTCOME", "output": None,
                 "execution_provenance": "REAL_PROVIDER" if invalid or rejected else "UNKNOWN",
+                **({"validation": {"schema_pass": False, "error_types": sorted({item['type'] for item in exc.errors()})}}
+                    if isinstance(exc, ValidationError) else {}),
                 "retry_delay_seconds": _retry_delay(exc) if rejected else None,
                 "error_code": error, "finished_at": now(), "duration_ms": int((monotonic() - clock) * 1000)})
             if not accepted: return GatewayResult(outcome="UNKNOWN_OUTCOME", error_code="ATTEMPT_ALREADY_SEALED", step_id=step.id)

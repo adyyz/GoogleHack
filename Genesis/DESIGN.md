@@ -145,3 +145,30 @@ Completion toasts use a papaya #ed8a53 time-remaining bar, driven by the same ei
 ### Connected case stages ? 18 October 2026
 
 Source evidence, Risk scoring, AI triage and Analyst review share one ordered four-stage rail in both public and operator sessions. Success-green links show completed stages; neutral links keep locked/pending stages visibly connected. At small widths the trail wraps into two rows without crossing text. Public AI/review states stay locked. Case completion excludes inactive policy-excluded alerts, retaining frozen/in-progress work; missing context never gains a false risk-scoring check.
+
+
+### Bulk learning workspace
+
+Reuse the same slate canvas, four metric cards, native selects/number input, app-owned dialogs and shared case-stage trail. Public simulation has explicit zero-call/tab-scoped provenance; operator jobs retain genuine completion and review states. Use a bounded table with its own horizontal/vertical scroll, 50-row pages, explicit status filters and a direct awaiting-review filter. Dataset totals never equal the loaded page count. Frozen-review cards stay compact and preserve the shared review flow.
+
+
+Unified investigation queue: the 40,000-transaction corpus is the sole investigation workspace. Batch size and progress lead the queue before filters. Genuine completed rows expose a labeled Review button opening the shared native dialog with only the analyst decision form; analysis stays in the evidence area. Read-only preloaded references have an explicit simulation badge and a separate reference preview, never a saved-human badge. Secondary actions use the shared bordered, slate/paper button recipe with restrained, assistive-technology-hidden emoji. Current corpus supporting evidence opens in a shared investigation dialog from Evolution.
+
+
+Evolution cutoff controls use one SyntheticLearning component, shared secondary/primary buttons and native dialogs. Scope is selected through a labeled native select: controlled local fixture or existing corpus references. The numbered prepare/validate/approve/apply/compare trail is instructional rather than fabricated execution progress. Empty-candidate records read Baseline retained; protected observations and absent/failed validation have distinct labels. Rule-matrix recommendation history uses a collapsed native disclosure and bounded overflow, with top-aligned cells. No typography or palette changes.
+
+
+Global table density: all tables retain full available width and use automatic column sizing. Adjacent 5px horizontal cell insets provide 10px inter-column padding, with 10px vertical padding. Headers and prose wrap without fixed per-cell width caps. Existing minimum widths on complex tables preserve readable columns on mobile; their own overflow surface handles scrolling. Table scroll owners are bounded at 520px, with individual header cells sticky at the top on an opaque theme surface above scrolling content. Each scroll owner isolates its stacking layers. Matrix rule buttons and category pills stack with an explicit 8px gap and wrap inside their own column. This supersedes the earlier content-width-only Evolution variant.
+
+
+Global legibility: all table header groups use weight 750 and ink text. Badge/category/status tags and outline labels use fully rounded dark pills with light paper text. Existing semantic success, warning, danger, violet and cobalt colors provide the backgrounds; neutral pills use muted slate. This replaces pale category/status backgrounds while retaining their textual labels.
+
+Table outer gutters: first and last cells have 10px outer horizontal padding, including headers. Selected-row backgrounds remain continuous across the full table width; their contents align with unselected rows and sit inside the highlighted edges. Interior column padding remains 5px per side.
+
+Evolution story: the current corpus leads with Outcomes, Understand, Learn, Apply and Observe in document order. Numbered slate/cobalt headings encode this evidence-to-policy sequence. Wrapping native jump buttons scroll and focus headings without changing selections, drafts or stored state. The rule matrix precedes the frozen report selector and report; learning inputs precede candidate controls. Practice uses a separate native disclosure. Earlier Demo/Discovery UI and API entry points are retired; current corpus is the only operational scope. All views reuse the existing typography, palette, dialogs, table gutters and sticky headers.
+
+Queue detail ownership: the rightmost table column contains a labeled eye button opening the shared wide native dialog. Identity/account context, computed risk dimensions and weights, available trail, stage checks and private analysis live there; the page no longer repeats the selected-case preview below the table. Five queue filters share one desktop row and wrap at tablet/mobile widths. Pagination and batch actions use the same secondary buttons. Rule rows include a plain-language explanation from the shared catalog. Publication panels use the standard heading, native textarea, word count and aligned primary/secondary actions.
+
+Seeded history: a read-only operator panel inside synthetic practice reuses shared metrics, dark pills, full-width sticky-header tables and native disclosures. Reference imports, actual Gemini completions and genuine human reviews have separate counters and explicit provenance. Model/reference comparisons show case and identity denominators. Refresh never starts model work. The panel uses the existing slate canvas and paper surfaces without a new theme or chart dependency.
+
+Active baseline progress leads this panel with 2,000 preprocessing cases, actual AI advisory completions, pending cases and 1,000 reserved cases. Its nine-rule allocation table uses existing full-width gutters and sticky headers. Identity separation and advisory-versus-human provenance remain visible beside these metrics. Earlier reference-only fitting is collapsed in a native disclosure.

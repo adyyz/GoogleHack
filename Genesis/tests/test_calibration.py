@@ -66,12 +66,12 @@ def test_all_nine_rules_and_overlapping_statistics_keep_human_denominators():
 def test_calibration_deduplicates_alerts_and_hashes_original_feedback(monkeypatch):
     from types import SimpleNamespace
     from backend import calibration
-    original = {"id": "feedback", "alert_id": "alert", "revision": 2, "provenance": "HUMAN_OPERATOR",
+    original = {"id": "feedback", "dataset_id": "TEST_ONLY", "case_id": "case", "alert_id": "alert", "revision": 2, "provenance": "HUMAN_OPERATOR",
         "verdict": "TRUE_POSITIVE", "triage_run_id": "run", "submitted_at": datetime.now(timezone.utc)}
-    records = {('feedback_events', 'feedback'): original, ('alerts', 'alert'): {"id": "alert", "case_id": "case", "rule_id": "HIGH_VALUE"},
-        ('pipeline_runs', 'run'): {"id": "run", "state": "COMPLETE", "alert_id": "alert", "config_bundle_id": "bundle"},
+    records = {('feedback_events', 'feedback'): original, ('alerts', 'alert'): {"id": "alert", "dataset_id": "TEST_ONLY", "case_id": "case", "rule_id": "HIGH_VALUE"},
+        ('pipeline_runs', 'run'): {"id": "run", "dataset_id": "TEST_ONLY", "case_id": "case", "state": "COMPLETE", "alert_id": "alert", "config_bundle_id": "bundle"},
         ('config_versions', 'bundle'): {"body": {}}}
-    repo = SimpleNamespace(get=lambda collection, ident: records[(collection, ident)],
+    repo = SimpleNamespace(dataset_id="TEST_ONLY", get=lambda collection, ident: records[(collection, ident)],
         operational_case=lambda _: {"customer_id": "identity"}, db=SimpleNamespace(transaction=lambda **_: None),
         _sealed_chain=lambda *_: [{"leg_id": "A0", "output": {"heuristic_score": .5,
             "requires_context_or_protected_review": False, "score_is_probability": False}}])

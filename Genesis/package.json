@@ -14,7 +14,7 @@
     "api": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m uvicorn backend.api:app --host 127.0.0.1 --port 8080",
     "seed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m backend.seed",
     "test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m pytest -q",
-    "test:integration": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1 emulators:exec --only auth,firestore --project demo-aml-insight \"powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m pytest tests/test_integration.py -q\"",
+    "test:integration": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-local.ps1",
     "doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1",
     "python:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-python.ps1",
     "python:sync": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-python.ps1",
@@ -23,7 +23,10 @@
     "firebase:mcp": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1 mcp --dir . --only auth,firestore",
     "gcloud": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/gcloud.ps1",
     "emulators": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1 emulators:start --only auth,firestore --project demo-aml-insight",
-    "emulators:check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1 emulators:exec --only auth,firestore --project demo-aml-insight \"node scripts/check-emulators.cjs\""
+    "emulators:check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/firebase.ps1 emulators:exec --only auth,firestore --project demo-aml-insight \"node scripts/check-emulators.cjs\"",
+    "bulk:generate": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m backend.bulk_dataset",
+    "bulk:import": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/python.ps1 -m backend.bulk_jobs --import-local",
+    "test:browser:isolated": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-local.ps1 -Browser"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

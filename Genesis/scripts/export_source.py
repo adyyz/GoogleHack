@@ -18,7 +18,7 @@ ROOT_FILES = frozenset({"README.md", "DESIGN.md", "UX-CONTRACT.md", "premium-ui.
     "tsconfig.json", "vite.config.ts", "firebase.json", "firestore.rules", "firestore.indexes.json"})
 SUFFIXES = {"backend": {".py"}, "frontend": {".ts", ".tsx", ".css", ".html"}, "tests": {".py"},
     "scripts": {".py", ".ps1", ".cjs"}}
-DOCUMENTS = frozenset({"evolution-rule-intelligence.md", "credit-verification.md", "deployment-recovery.md", "cloud-vault-setup.md",
+DOCUMENTS = frozenset({"bulk-learning-batches.md", "evolution-rule-intelligence.md", "credit-verification.md", "deployment-recovery.md", "cloud-vault-setup.md",
     "evaluation-evidence.md", "evaluation-record.json", "implementation-status.md", "submission-draft.html", "demo-script.md", "local-integration-handoff.md"})
 PUBLIC_FILES = frozenset({"docs/workstreams/infrastructure.html", "docs/workstreams/code-completion.html",
     "submission/README.md", "submission/pitch-deck/README.md", "submission/pitch-deck/submission-draft.html",

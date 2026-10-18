@@ -24,7 +24,12 @@ class Conflict(Exception):
 
 
 class Repository:
-    def __init__(self, settings: Settings):
+    dataset_id = DATASET_ID
+
+    def __init__(self, settings: Settings, dataset_id=DATASET_ID):
+        from .bulk_dataset import ID as BULK_ID, SEEDED_ID
+        if dataset_id not in {DATASET_ID, BULK_ID, SEEDED_ID}: raise ValueError("Unknown dataset scope")
+        self.dataset_id = dataset_id
         self.settings = settings
         self.db = firestore.Client(project=settings.project_id,
             credentials=google.auth.credentials.AnonymousCredentials() if settings.mode == "local" else None)
@@ -43,25 +48,25 @@ class Repository:
         doc = self.db.collection(collection).document(ident).get(timeout=5)
         return {"id": doc.id, **doc.to_dict()} if doc.exists else None
 
-    def list(self, collection: str, dataset_id=DATASET_ID) -> list[dict]:
-        query = self.db.collection(collection).where(filter=firestore.FieldFilter("dataset_id", "==", dataset_id))
+    def list(self, collection: str, dataset_id=None) -> list[dict]:
+        query = self.db.collection(collection).where(filter=firestore.FieldFilter("dataset_id", "==", dataset_id or self.dataset_id))
         return [{"id": doc.id, **doc.to_dict()} for doc in query.stream(timeout=10)]
 
     def create(self, collection: str, ident: str, data: dict):
         self.db.collection(collection).document(ident).create({"schema_version": 1, "created_at": now(), **data}, timeout=10)
 
     def audit(self, action: str, collection: str, ident: str, actor: str, **fields):
-        self.create("audit_events", uuid4().hex, {"dataset_id": DATASET_ID, "action": action,
+        self.create("audit_events", uuid4().hex, {"dataset_id": self.dataset_id, "action": action,
             "object_collection": collection, "object_id": ident, "actor": actor, "occurred_at": now(), **fields})
 
     def load_dataset(self) -> Dataset:
-        manifest = self.get("datasets", DATASET_ID)
+        manifest = self.get("datasets", self.dataset_id)
         if not manifest or manifest.get("state") != "READY": raise LookupError("Dataset not seeded; run npm run seed with local emulators running")
         mappings = {}
         for collection, model in [("customers", Customer), ("accounts", Account), ("transactions", Transaction), ("cases", Case)]:
             fields = set(model.model_fields)
             mappings[collection] = {row["id"]: model.model_validate({k: v for k, v in row.items() if k in fields}) for row in self.list(collection)}
-        return Dataset(id=DATASET_ID, seed=manifest["seed"], version=manifest["version"],
+        return Dataset(id=self.dataset_id, seed=manifest["seed"], version=manifest["version"],
             reference_labels=manifest["reference_labels"], reference_reasons=manifest["reference_reasons"],
             manifest_hash=manifest["manifest_hash"], **mappings)
 
@@ -74,7 +79,7 @@ class Repository:
             snapshot = alert_ref.get(transaction=transaction)
             if not snapshot.exists: raise LookupError("Alert not found")
             alert = snapshot.to_dict()
-            if alert["dataset_id"] != DATASET_ID: raise Conflict("Dataset mismatch")
+            if alert["dataset_id"] != self.dataset_id: raise Conflict("Dataset mismatch")
             if alert.get("feedback_revision", 0) > 0: raise Conflict("Verdict is frozen; saved feedback cannot be changed")
             self.operational_case(alert["case_id"])
             if alert.get("feedback_revision", 0) != request.expected_revision: raise Conflict("Feedback changed; reload before submitting")
@@ -96,17 +101,19 @@ class Repository:
             bundle = self.db.collection("config_versions").document(run["config_bundle_id"]).get(transaction=transaction).to_dict()
             revision = request.expected_revision + 1
             ident = f"{alert_id}-{revision}"
-            event = {"id": ident, "schema_version": 1, "dataset_id": DATASET_ID, "case_id": alert["case_id"],
+            event = {"id": ident, "schema_version": 1, "dataset_id": self.dataset_id, "case_id": alert["case_id"],
                 "alert_id": alert_id, "triage_run_id": run_id, **request.model_dump(exclude={"expected_revision", "expected_assessment_id"}),
                 "revision": revision, "actor_uid": actor, "provenance": "HUMAN_OPERATOR", "submitted_at": now(),
                 "detector_policy_id": bundle["body"].get("detector_version", "detector-v1"),
                 "auto_label_policy_id": assessment["body"]["label_policy_version"] if assessment else bundle["body"].get("auto_label_policy_version", "auto-label-v1"),
                 "machine_assessment_id": assessment_id, "assessment_hash": assessment["content_hash"] if assessment else None}
             if assessment: event["machine_label"] = assessment["body"]["predicted_verdict"]
+            progress = self._bulk_progress(transaction, alert["case_id"], alert_id, {"feedback_revision": revision})
             transaction.create(self.db.collection("feedback_events").document(ident), event)
+            if progress: transaction.set(*progress)
             transaction.update(alert_ref, {"feedback_revision": revision})
             transaction.create(self.db.collection("audit_events").document(uuid4().hex), {
-                "dataset_id": DATASET_ID, "action": "FEEDBACK_RECORDED", "object_id": ident,
+                "dataset_id": self.dataset_id, "action": "FEEDBACK_RECORDED", "object_id": ident,
                 "object_collection": "feedback_events", "actor": actor, "occurred_at": now(), "after_hash": content_hash(event)})
             return event
         return self._contended_transaction(write)
@@ -120,13 +127,13 @@ class Repository:
 
         @firestore.transactional
         def read(tx):
-            manifest = self.db.collection("datasets").document(DATASET_ID).get(transaction=tx).to_dict()
+            manifest = self.db.collection("datasets").document(self.dataset_id).get(transaction=tx).to_dict()
             if not manifest or manifest.get("state") != "READY": raise Conflict("Dataset is not ready")
             rows = {}
             # ponytail: bounded demo snapshot; use time windows before exceeding
             # 10k records per collection or the conservative document size limit.
             for collection in ("feedback_events", "step_runs", "alerts"):
-                query = self.db.collection(collection).where(filter=firestore.FieldFilter("dataset_id", "==", DATASET_ID)).limit(10001)
+                query = self.db.collection(collection).where(filter=firestore.FieldFilter("dataset_id", "==", self.dataset_id)).limit(10001)
                 rows[collection] = [{"id": doc.id, **doc.to_dict()} for doc in query.stream(transaction=tx)]
                 if len(rows[collection]) > 10000: raise Conflict("Analytical input window exceeds demo capacity")
             alerts = {alert["id"]: alert for alert in rows["alerts"]}
@@ -146,7 +153,7 @@ class Repository:
                 if (run_id, alert["id"]) in checked: continue
                 run = self.db.collection("pipeline_runs").document(run_id or "missing").get(transaction=tx).to_dict()
                 if (not run or run.get("state") != "COMPLETE" or run.get("alert_id") != alert["id"]
-                    or run.get("dataset_id") != DATASET_ID): raise Conflict("Feedback requires a genuine completed run")
+                    or run.get("dataset_id") != self.dataset_id): raise Conflict("Feedback requires a genuine completed run")
                 self._sealed_chain(tx, run)
                 if event.get("machine_assessment_id"):
                     assessment = self.db.collection("auto_label_assessments").document(event["machine_assessment_id"]).get(transaction=tx)
@@ -174,10 +181,10 @@ class Repository:
         def persist(tx):
             snapshot = ref.get(transaction=tx)
             if snapshot.exists: return {"id": snapshot.id, **snapshot.to_dict()}
-            result = {"id": ident, "dataset_id": DATASET_ID, "schema_version": 1,
+            result = {"id": ident, "dataset_id": self.dataset_id, "schema_version": 1,
                 "content_hash": ident, "body": body, "created_at": now(), "created_by": actor}
             tx.create(ref, result)
-            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": self.dataset_id,
                 "action": "ANALYTICAL_INPUTS_FROZEN", "object_collection": "analytical_snapshots", "object_id": ident,
                 "actor": actor, "occurred_at": now(), "after_hash": ident})
             return result
@@ -187,7 +194,7 @@ class Repository:
 
     def evolution_context(self, snapshot_id):
         snapshot = self.get("analytical_snapshots", snapshot_id)
-        if not snapshot or snapshot.get("dataset_id") != DATASET_ID: raise LookupError("Analytical snapshot not found")
+        if not snapshot or snapshot.get("dataset_id") != self.dataset_id: raise LookupError("Analytical snapshot not found")
         body = snapshot["body"]
         if content_hash(body) != snapshot_id or snapshot.get("content_hash") != snapshot_id:
             raise Conflict("Analytical snapshot integrity failed")
@@ -229,8 +236,8 @@ class Repository:
         self.evolution_context(snapshot_id)  # Validate immutable inputs before making work.
         from google.api_core.exceptions import AlreadyExists
         bundle_id = self.ensure_baseline()
-        ident = stable_id(DATASET_ID, "A5", snapshot_id)
-        run = PipelineRun(id=ident, dataset_id=DATASET_ID, kind="EVOLUTION", analytical_snapshot_id=snapshot_id,
+        ident = stable_id(self.dataset_id, "A5", snapshot_id)
+        run = PipelineRun(id=ident, dataset_id=self.dataset_id, kind="EVOLUTION", analytical_snapshot_id=snapshot_id,
             config_bundle_id=bundle_id, actor_uid=actor).model_dump()
         try: self.create("pipeline_runs", ident, run)
         except AlreadyExists: return ident, False
@@ -248,7 +255,7 @@ class Repository:
             if (not run or run.get("kind") != "EVOLUTION" or run.get("state") != "RUNNING" or not step
                 or step.get("state") != "SUCCEEDED" or step.get("execution_provenance") != "REAL_PROVIDER"
                 or step.get("run_id") != run_id or step.get("config_bundle_id") != run["config_bundle_id"]
-                or step.get("dataset_id") != DATASET_ID or not step.get("validation", {}).get("schema_pass")
+                or step.get("dataset_id") != self.dataset_id or not step.get("validation", {}).get("schema_pass")
                 or not step.get("validation", {}).get("evidence_pass") or not step.get("output")):
                 raise Conflict("A validated real A5 result is required")
             self._check_execution_owner(tx, run, lease)
@@ -260,7 +267,7 @@ class Repository:
                     "analytical_snapshot_id": run["analytical_snapshot_id"], "body": {"base_detector_version": "detector-v1",
                         "rule_id": "HIGH_VALUE", "candidate": candidate}}
                 version_id = content_hash(version)
-                recommendation = {"id": run_id, "dataset_id": DATASET_ID, "evolution_run_id": run_id,
+                recommendation = {"id": run_id, "dataset_id": self.dataset_id, "evolution_run_id": run_id,
                     "state": "PROPOSED", "revision": 0, "config_version_id": version_id, "candidate": candidate,
                     "hypothesis": result["hypothesis"], "support_feedback_ids": result["support_feedback_ids"],
                     "analytical_snapshot_id": run["analytical_snapshot_id"], "priority": "P2",
@@ -272,7 +279,7 @@ class Repository:
                 tx.create(self.db.collection("recommendations").document(run_id), recommendation)
             if result["status"] != "SUPPORTED_PROPOSAL":
                 tx.create(self.db.collection("recommendations").document(run_id), {
-                    "id": run_id, "dataset_id": DATASET_ID, "evolution_run_id": run_id,
+                    "id": run_id, "dataset_id": self.dataset_id, "evolution_run_id": run_id,
                     "analytical_snapshot_id": run["analytical_snapshot_id"], "state": "PROPOSED", "revision": 0,
                     "candidate": None, "config_version_id": None, "priority": "P2",
                     "hypothesis": result["summary"], "support_feedback_ids": [],
@@ -282,14 +289,14 @@ class Repository:
                 if item["kind"] == "DETECTOR_CHANGE": continue  # One canonical executable recommendation above.
                 item_id = stable_id(run_id, "informational", index)
                 tx.create(self.db.collection("recommendations").document(item_id), {
-                    "id": item_id, "dataset_id": DATASET_ID, "evolution_run_id": run_id,
+                    "id": item_id, "dataset_id": self.dataset_id, "evolution_run_id": run_id,
                     "analytical_snapshot_id": run["analytical_snapshot_id"], "state": "PROPOSED", "revision": 0,
                     "kind": "INFORMATIONAL", "rule_id": item["rule_id"], "priority": "P2",
                     "candidate": None, "config_version_id": None, "hypothesis": item["title"] + ': ' + item["rationale"],
                     "support_feedback_ids": item["support_feedback_ids"], "activation_allowed": False,
                     "limitations": ["Informational only; no executable detector candidate"], "created_at": now()})
             tx.update(run_ref, {"state": "COMPLETE", "stage": "A5", "checkpoint_step_id": step_id, "completed_at": now(), "error_code": None})
-            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": self.dataset_id,
                 "action": "A5_RECORDED", "object_collection": "pipeline_runs", "object_id": run_id,
                 "actor": "local-worker", "occurred_at": now(), "run_id": run_id, "after_hash": content_hash(result)})
         return complete(self.db.transaction())
@@ -298,12 +305,12 @@ class Repository:
         from .usage import run_summary
         from .agent_views import agent_trace
         run = self.get("pipeline_runs", run_id)
-        if not run or run.get("kind") != "EVOLUTION" or run.get("dataset_id") != DATASET_ID: raise LookupError("Evolution run not found")
+        if not run or run.get("kind") != "EVOLUTION" or run.get("dataset_id") != self.dataset_id: raise LookupError("Evolution run not found")
         result = None
         if run["state"] == "COMPLETE":
             step = self._leg_step(None, run, "A5")
             if (not step or step.get("state") != "SUCCEEDED" or step.get("execution_provenance") != "REAL_PROVIDER"
-                or step.get("config_bundle_id") != run["config_bundle_id"] or step.get("dataset_id") != DATASET_ID
+                or step.get("config_bundle_id") != run["config_bundle_id"] or step.get("dataset_id") != self.dataset_id
                 or not step.get("validation", {}).get("schema_pass") or not step.get("validation", {}).get("evidence_pass")):
                 raise Conflict("A validated real A5 result is required")
             result = step["output"]
@@ -321,7 +328,7 @@ class Repository:
             stored = ref.get(transaction=tx)
             if not stored.exists: raise LookupError("Recommendation not found")
             before = stored.to_dict()
-            if before.get("dataset_id") != DATASET_ID: raise LookupError("Recommendation not found")
+            if before.get("dataset_id") != self.dataset_id: raise LookupError("Recommendation not found")
             if before.get("revision", 0) != request.expected_revision: raise Conflict("Recommendation changed; reload before reviewing")
             if before.get("state") not in {"PROPOSED", "REVIEWED", "APPROVED"}:
                 raise Conflict("Recommendation is terminal; refresh its stored state")
@@ -329,7 +336,7 @@ class Repository:
             update = {"state": request.state, "review_notes": request.notes, "reviewed_by": actor,
                 "reviewed_at": now(), "revision": request.expected_revision + 1, "activation_allowed": False}
             tx.update(ref, update)
-            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": self.dataset_id,
                 "action": "RECOMMENDATION_REVIEWED", "object_collection": "recommendations", "object_id": ident,
                 "actor": actor, "occurred_at": now(), "before_hash": content_hash(before), "after_hash": content_hash({**before, **update})})
             return {"id": ident, **before, **update}
@@ -338,13 +345,13 @@ class Repository:
     def freeze_candidate(self, request, actor):
         from .engine import candidate_options
         from .evolution import candidate_identity
-        ref = self.db.collection("candidate_freezes").document(stable_id(DATASET_ID, "heldout"))
+        ref = self.db.collection("candidate_freezes").document(stable_id(self.dataset_id, "heldout"))
         candidate = next(item for item in candidate_options() if item["id"] == request.candidate_id)
 
         @firestore.transactional
         def freeze(tx):
             existing = ref.get(transaction=tx)
-            manifest = self.db.collection("datasets").document(DATASET_ID).get(transaction=tx).to_dict()
+            manifest = self.db.collection("datasets").document(self.dataset_id).get(transaction=tx).to_dict()
             if not manifest or manifest.get("state") != "READY": raise Conflict("Dataset is not ready")
             identity = candidate_identity(manifest["manifest_hash"], candidate)
             if identity != request.expected_candidate_hash: raise Conflict("Candidate changed; reload before freezing")
@@ -354,9 +361,9 @@ class Repository:
                 return {"id": existing.id, **record}
             run = self.db.collection("pipeline_runs").document(request.evolution_run_id).get(transaction=tx).to_dict()
             step = self._leg_step(tx, run, "A5") if run else {}
-            if (not run or run.get("kind") != "EVOLUTION" or run.get("state") != "COMPLETE" or run.get("dataset_id") != DATASET_ID
+            if (not run or run.get("kind") != "EVOLUTION" or run.get("state") != "COMPLETE" or run.get("dataset_id") != self.dataset_id
                 or not step or step.get("state") != "SUCCEEDED" or step.get("execution_provenance") != "REAL_PROVIDER"
-                or step.get("config_bundle_id") != run["config_bundle_id"] or step.get("dataset_id") != DATASET_ID
+                or step.get("config_bundle_id") != run["config_bundle_id"] or step.get("dataset_id") != self.dataset_id
                 or not step.get("validation", {}).get("schema_pass") or not step.get("validation", {}).get("evidence_pass") or not step.get("output")):
                 raise Conflict("Store a genuine validated A5 result before freezing a candidate")
             snapshot = self.db.collection("analytical_snapshots").document(run["analytical_snapshot_id"]).get(transaction=tx).to_dict()
@@ -369,9 +376,9 @@ class Repository:
                 "analytical_snapshot_id": run["analytical_snapshot_id"], "detector_gate": snapshot["body"]["detector_gate"],
                 "support_status": "FEEDBACK_SUPPORTED" if supported else "OPERATOR_SELECTED_NOT_FEEDBACK_SUPPORTED",
                 "frozen_by": actor, "notes": request.notes, "activation_allowed": False}
-            record = {"id": ref.id, "dataset_id": DATASET_ID, **body, "content_hash": content_hash(body), "frozen_at": now()}
+            record = {"id": ref.id, "dataset_id": self.dataset_id, **body, "content_hash": content_hash(body), "frozen_at": now()}
             tx.create(ref, record)
-            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": self.dataset_id,
                 "action": "DETECTOR_CANDIDATE_FROZEN", "object_collection": "candidate_freezes", "object_id": ref.id,
                 "actor": actor, "occurred_at": now(), "after_hash": record["content_hash"]})
             return record
@@ -381,7 +388,7 @@ class Repository:
         from .engine import simulate
         from .evolution import candidate_identity
         frozen = self.get("candidate_freezes", freeze_id)
-        if not frozen or frozen.get("dataset_id") != DATASET_ID: raise LookupError("Frozen candidate not found")
+        if not frozen or frozen.get("dataset_id") != self.dataset_id: raise LookupError("Frozen candidate not found")
         body = {key: value for key, value in frozen.items() if key not in {"id", "dataset_id", "content_hash", "frozen_at", "schema_version", "created_at"}}
         if content_hash(body) != frozen["content_hash"] or candidate_identity(frozen["dataset_hash"], frozen["candidate"]) != frozen["candidate_hash"]:
             raise Conflict("Frozen candidate integrity failed")
@@ -391,7 +398,7 @@ class Repository:
         def claim(tx):
             snapshot = ref.get(transaction=tx)
             if snapshot.exists: return {"id": snapshot.id, **snapshot.to_dict()}
-            tx.create(ref, {"id": freeze_id, "dataset_id": DATASET_ID, "state": "RUNNING", "freeze_id": freeze_id,
+            tx.create(ref, {"id": freeze_id, "dataset_id": self.dataset_id, "state": "RUNNING", "freeze_id": freeze_id,
                 "candidate_hash": frozen["candidate_hash"], "freeze_hash": frozen["content_hash"], "started_at": now(), "actor_uid": actor})
             return None
         existing = self._contended_transaction(claim)
@@ -405,7 +412,7 @@ class Repository:
         else:
             batch = self.db.batch()
             batch.update(ref, {"state": "COMPLETE", "metrics": metrics, "completed_at": now(), "error_code": None})
-            batch.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+            batch.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": self.dataset_id,
                 "action": "HELDOUT_SIMULATION_RECORDED", "object_collection": "simulations", "object_id": freeze_id,
                 "actor": actor, "occurred_at": now(), "after_hash": content_hash(metrics)})
             batch.commit(timeout=10)
@@ -417,7 +424,7 @@ class Repository:
         if active and content_hash(active["public_cases"]) == cases_hash:
             return active["id"]
         ident = uuid4().hex
-        payload = {"dataset_id": DATASET_ID, "state": "PUBLISHED", "public_cases": cases,
+        payload = {"dataset_id": self.dataset_id, "state": "PUBLISHED", "public_cases": cases,
             "public_summary": summary, "source_provenance": "DETERMINISTIC_ONLY", "published_at": now(), "published_by": actor}
         payload["cases_hash"] = cases_hash
         payload["snapshot_hash"] = content_hash(payload)
@@ -432,7 +439,7 @@ class Repository:
         return self.get("publications", active["publication_id"]) if active else None
 
     def active_policy(self, tx=None):
-        snapshot = self.db.collection("policy_controls").document(DATASET_ID).get(transaction=tx)
+        snapshot = self.db.collection("policy_controls").document(self.dataset_id).get(transaction=tx)
         row = snapshot.to_dict() if snapshot.exists else {"revision": 0, "policy_version_id": "detector-v1"}
         candidate = None
         if row["policy_version_id"] != "detector-v1":
@@ -487,7 +494,7 @@ class Repository:
 
     def record_patterns(self, snapshot_id):
         snapshot = self.get("analytical_snapshots", snapshot_id)
-        groups = {stable_id(DATASET_ID, row["rule_id"], row["typology"], row["detector_policy_id"]): row
+        groups = {stable_id(self.dataset_id, row["rule_id"], row["typology"], row["detector_policy_id"]): row
             for row in snapshot["body"].get("pattern_memory", [])}
         for ident, group in groups.items():
             ref = self.db.collection("evolution_patterns").document(ident)
@@ -498,7 +505,7 @@ class Repository:
                 support = sorted(set(existing.get("support_feedback_ids", [])) | set(group["support_feedback_ids"]))
                 new_support = support != existing.get("support_feedback_ids")
                 if not new_support and snapshot_id in existing.get("snapshot_ids", []): return
-                tx.set(ref, {**existing, **group, "id": ident, "dataset_id": DATASET_ID,
+                tx.set(ref, {**existing, **group, "id": ident, "dataset_id": self.dataset_id,
                     "support_feedback_ids": support, "support_strength": min(len(support) / 15, 1),
                     "strength_is_probability": False,
                     "snapshot_ids": sorted(set(existing.get("snapshot_ids", [])) | {snapshot_id}),
@@ -513,11 +520,11 @@ class Repository:
         def update(tx):
             snapshot = ref.get(transaction=tx)
             row = snapshot.to_dict() if snapshot.exists else None
-            if not row or row.get("dataset_id") != DATASET_ID: raise LookupError("Pattern not found")
+            if not row or row.get("dataset_id") != self.dataset_id: raise LookupError("Pattern not found")
             if row["revision"] != request.expected_revision: raise Conflict("Pattern changed; refresh")
             changes = {"status": request.status, "revision": row["revision"] + 1}
             tx.update(ref, changes)
-            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": self.dataset_id,
                 "action": "PATTERN_STATUS_CHANGED", "object_collection": "evolution_patterns", "object_id": ident,
                 "actor": actor, "occurred_at": now(), "notes": request.notes, "after_hash": content_hash(changes)})
             return {"id": ident, **row, **changes}
@@ -529,19 +536,19 @@ class Repository:
             return {"id": snapshot.id, **snapshot.to_dict()} if snapshot.exists else None
         recommendation = read("recommendations", recommendation_id)
         run = read("pipeline_runs", recommendation_id)
-        if (not recommendation or recommendation.get("dataset_id") != DATASET_ID or not run
-            or run.get("kind") != "EVOLUTION" or run.get("state") != "COMPLETE" or run.get("dataset_id") != DATASET_ID):
+        if (not recommendation or recommendation.get("dataset_id") != self.dataset_id or not run
+            or run.get("kind") != "EVOLUTION" or run.get("state") != "COMPLETE" or run.get("dataset_id") != self.dataset_id):
             raise Conflict("A genuine completed recommendation is required")
         step = self._leg_step(tx, run, "A5")
         snapshot = read("analytical_snapshots", run["analytical_snapshot_id"])
-        frozen = read("candidate_freezes", stable_id(DATASET_ID, "heldout"))
+        frozen = read("candidate_freezes", stable_id(self.dataset_id, "heldout"))
         simulation = read("simulations", frozen["id"]) if frozen else None
         from .engine import candidate_options
         from .evolution import candidate_identity, sufficiency
         candidate = recommendation.get("candidate")
         if (not snapshot or content_hash(snapshot["body"]) != run["analytical_snapshot_id"]
             or not step or step.get("state") != "SUCCEEDED" or step.get("execution_provenance") != "REAL_PROVIDER"
-            or step.get("config_bundle_id") != run["config_bundle_id"] or step.get("dataset_id") != DATASET_ID
+            or step.get("config_bundle_id") != run["config_bundle_id"] or step.get("dataset_id") != self.dataset_id
             or not step.get("validation", {}).get("schema_pass") or not step.get("validation", {}).get("evidence_pass")
             or (step.get("output") or {}).get("status") != "SUPPORTED_PROPOSAL" or candidate not in candidate_options()
             or step["output"].get("candidate_id") != candidate["id"]):
@@ -576,7 +583,7 @@ class Repository:
         except Conflict as exc:
             evidence = None
             eligible, reason, priority = False, str(exc), "P2"
-        simulation = self.get("simulations", stable_id(DATASET_ID, "heldout"))
+        simulation = self.get("simulations", stable_id(self.dataset_id, "heldout"))
         if simulation and simulation.get("state") == "COMPLETE" and simulation["metrics"].get("candidate") == row.get("candidate"):
             if simulation["metrics"].get("additional_missed_case_ids"): priority = "P0"
             measured = {key: simulation["metrics"][key] for key in ("baseline", "candidate_metrics", "benign_alerts_removed", "suspicious_alerts_removed")}
@@ -593,12 +600,12 @@ class Repository:
 
     def apply_recommendation(self, ident, request, actor, rollback=False):
         ref = self.db.collection("recommendations").document(ident)
-        control_ref = self.db.collection("policy_controls").document(DATASET_ID)
+        control_ref = self.db.collection("policy_controls").document(self.dataset_id)
         @firestore.transactional
         def apply(tx):
             snapshot = ref.get(transaction=tx)
             row = snapshot.to_dict() if snapshot.exists else None
-            if not row or row.get("dataset_id") != DATASET_ID: raise LookupError("Recommendation not found")
+            if not row or row.get("dataset_id") != self.dataset_id: raise LookupError("Recommendation not found")
             policy = self.active_policy(tx)
             if row["revision"] != request.expected_revision or policy["revision"] != request.expected_policy_revision:
                 raise Conflict("Recommendation or policy changed; refresh before applying")
@@ -630,7 +637,7 @@ class Repository:
                 if not version.exists: tx.create(version_ref, {"body": body, "content_hash": target, "created_at": now(), "kind": "DETECTOR_POLICY"})
             tx.set(control_ref, {"policy_version_id": target, "revision": policy["revision"] + 1, "updated_at": now()})
             tx.update(ref, changes)
-            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": self.dataset_id,
                 "action": "DETECTOR_POLICY_ROLLED_BACK" if rollback else "DETECTOR_POLICY_APPLIED",
                 "object_collection": "recommendations", "object_id": ident, "actor": actor, "occurred_at": now(),
                 "notes": request.notes, "from_policy": policy["policy_version_id"], "to_policy": target})
@@ -646,7 +653,12 @@ class Repository:
             snapshot = self.db.collection(collection).document(cursor).get(timeout=5)
             if not snapshot.exists: raise Conflict("History cursor is no longer available; reload")
             row = snapshot.to_dict()
-            if any(row.get(field) != value for field, value in filters) or (order != "__name__" and order not in row):
+            def field_value(field):
+                value = row
+                for part in field.split("."):
+                    value = value.get(part) if isinstance(value, dict) else None
+                return value
+            if any(field_value(field) != value for field, value in filters) or (order != "__name__" and order not in row):
                 raise Conflict("History cursor does not belong to this result set; reload")
             query = query.start_after(snapshot)
         rows = [{"id": doc.id, **doc.to_dict()} for doc in query.limit(limit + 1).stream(timeout=10)]
@@ -719,16 +731,16 @@ class Repository:
         def prepare(tx):
             snapshot = ref.get(transaction=tx)
             run = snapshot.to_dict() if snapshot.exists else None
-            if not run or run.get("dataset_id") != DATASET_ID or run.get("kind") not in {"TRIAGE_BATCH", "EVOLUTION"}:
+            if not run or run.get("dataset_id") != self.dataset_id or run.get("kind") not in {"TRIAGE_BATCH", "EVOLUTION"}:
                 raise Conflict("DISPATCH_RUN_INVALID")
             if run["state"] not in {"QUEUED", "DISPATCH_FAILED"}: raise Conflict("DISPATCH_RUN_NOT_QUEUED")
             if run.get("dispatch_state") in {"PENDING", "SENT", "UNKNOWN"}:
                 return {"run_id": run_id, "generation": run["dispatch_generation"], "task_id": run["dispatch_task_id"]}
             generation = run.get("dispatch_generation", 0) + 1
-            task_id = stable_id(DATASET_ID, "dispatch", run_id, generation)
+            task_id = stable_id(self.dataset_id, "dispatch", run_id, generation)
             tx.update(ref, {"state": "QUEUED", "dispatch_generation": generation, "dispatch_task_id": task_id,
                 "dispatch_state": "PENDING", "error_code": None})
-            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": self.dataset_id,
                 "action": "DISPATCH_PREPARED", "object_collection": "pipeline_runs", "object_id": run_id,
                 "actor": run["actor_uid"], "occurred_at": now(), "dispatch_generation": generation})
             return {"run_id": run_id, "generation": generation, "task_id": task_id}
@@ -742,7 +754,7 @@ class Repository:
         def record(tx):
             snapshot = ref.get(transaction=tx)
             run = snapshot.to_dict() if snapshot.exists else None
-            if not run or run.get("dataset_id") != DATASET_ID or run.get("dispatch_generation") != generation:
+            if not run or run.get("dataset_id") != self.dataset_id or run.get("dispatch_generation") != generation:
                 raise Conflict("DISPATCH_GENERATION_CHANGED")
             # A delivery or earlier acknowledgement is stronger evidence than a
             # late timeout/failure from CreateTask; do not downgrade it.
@@ -768,7 +780,7 @@ class Repository:
         def claim(tx):
             snapshot = ref.get(transaction=tx)
             run = snapshot.to_dict() if snapshot.exists else None
-            if not run or run.get("dataset_id") != DATASET_ID or run.get("kind") not in {"TRIAGE_BATCH", "EVOLUTION"}:
+            if not run or run.get("dataset_id") != self.dataset_id or run.get("kind") not in {"TRIAGE_BATCH", "EVOLUTION"}:
                 raise Conflict("WORKER_RUN_INVALID")
             if run.get("dispatch_generation") != generation: return {"status": "STALE", "lease": None}
             if run["state"] in {"COMPLETE", "FAILED", "DISPATCH_FAILED"}: return {"status": "TERMINAL", "lease": None}
@@ -781,7 +793,7 @@ class Repository:
             tx.update(ref, {"state": "RUNNING", "dispatch_state": "SENT", "lease_owner": owner,
                 "lease_expires_at": lease.expires_at, "execution_deadline_at": lease.execution_deadline_at,
                 "started_at": run.get("started_at") or instant, "lease_claim_count": run.get("lease_claim_count", 0) + 1})
-            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": self.dataset_id,
                 "action": "WORKER_LEASE_CLAIMED", "object_collection": "pipeline_runs", "object_id": run_id,
                 "actor": "worker", "occurred_at": instant, "dispatch_generation": generation,
                 "claim_number": run.get("lease_claim_count", 0) + 1})
@@ -792,7 +804,7 @@ class Repository:
         snapshot = self.db.collection("pipeline_runs").document(lease.run_id).get(transaction=tx)
         run = snapshot.to_dict() if snapshot.exists else {}
         instant = now()
-        if (run.get("dataset_id") != DATASET_ID or run.get("state") != "RUNNING"
+        if (run.get("dataset_id") != self.dataset_id or run.get("state") != "RUNNING"
             or run.get("dispatch_generation") != lease.generation or run.get("lease_owner") != lease.owner
             or not run.get("lease_expires_at") or run["lease_expires_at"] <= instant):
             raise Conflict("WORKER_LEASE_LOST")
@@ -831,7 +843,7 @@ class Repository:
         @firestore.transactional
         def create(tx):
             run = self.db.collection("pipeline_runs").document(step.run_id).get(transaction=tx).to_dict()
-            if (not run or run.get("dataset_id") != DATASET_ID or run.get("state") != "RUNNING"
+            if (not run or run.get("dataset_id") != self.dataset_id or run.get("state") != "RUNNING"
                 or run.get("config_bundle_id") != step.config_bundle_id or run.get("alert_id") != step.alert_id
                 or run.get("case_id") != step.case_id): raise Conflict("WORKER_RUN_LINK_INVALID")
             self._check_execution_owner(tx, run, lease, finishing=finishing)
@@ -851,7 +863,7 @@ class Repository:
             if parent["kind"] != "TRIAGE_BATCH": raise Conflict("WORKER_RUN_LINK_INVALID")
             children = [self.db.collection("pipeline_runs").document(ident).get(transaction=tx).to_dict() for ident in parent["child_run_ids"]]
             for child in children:
-                if (not child or child.get("dataset_id") != DATASET_ID or child.get("parent_run_id") != lease.run_id
+                if (not child or child.get("dataset_id") != self.dataset_id or child.get("parent_run_id") != lease.run_id
                     or child.get("config_bundle_id") != parent["config_bundle_id"] or child.get("case_id") != parent.get("case_id")
                     or child.get("state") not in {"COMPLETE", "FAILED"}): raise Conflict("CHILD_RUNS_NOT_TERMINAL")
                 if child["state"] == "COMPLETE": self._sealed_chain(tx, child)
@@ -869,7 +881,7 @@ class Repository:
             parent = self._check_worker_lease(tx, lease, finishing=finishing)
             snapshot = ref.get(transaction=tx)
             run = snapshot.to_dict() if snapshot.exists else None
-            if (not run or run.get("dataset_id") != DATASET_ID
+            if (not run or run.get("dataset_id") != self.dataset_id
                 or (run_id != lease.run_id and (run.get("parent_run_id") != lease.run_id or run_id not in parent.get("child_run_ids", [])
                     or run.get("config_bundle_id") != parent["config_bundle_id"] or run.get("case_id") != parent.get("case_id")))):
                 raise Conflict("WORKER_RUN_LINK_INVALID")
@@ -882,7 +894,7 @@ class Repository:
             alert_ref = self.db.collection("alerts").document(run["alert_id"]) if alert_state and run.get("alert_id") else None
             if alert_state:
                 alert = alert_ref.get(transaction=tx).to_dict() if alert_ref else None
-                if (not alert or alert.get("dataset_id") != DATASET_ID or alert.get("case_id") != run.get("case_id")
+                if (not alert or alert.get("dataset_id") != self.dataset_id or alert.get("case_id") != run.get("case_id")
                     or alert.get("latest_run_id") != run_id): raise Conflict("WORKER_ALERT_LINK_INVALID")
             tx.update(ref, changes)
             if alert_ref: tx.update(alert_ref, {"status": alert_state})
@@ -897,7 +909,7 @@ class Repository:
             snapshot = ref.get(transaction=tx)
             if not snapshot.exists: return None
             step = snapshot.to_dict()
-            if (step.get("dataset_id") != DATASET_ID
+            if (step.get("dataset_id") != self.dataset_id
                 or step.get("run_id") not in [lease.run_id, *parent.get("child_run_ids", [])]): raise Conflict("WORKER_STEP_LINK_INVALID")
             if step["state"] != "STARTED": return {"id": snapshot.id, **step}
             if (step.get("worker_lease") or {}).get("owner") == lease.owner: raise Conflict("ATTEMPT_STILL_OWNED")
@@ -984,10 +996,28 @@ class Repository:
             alert = alert_ref.get(transaction=tx).to_dict()
             if not alert or alert.get("latest_run_id") != run_id: raise Conflict("A newer investigation owns this alert")
             chain = self._sealed_chain(tx, run)
+            progress = self._bulk_progress(tx, run["case_id"], run["alert_id"], {"status": "COMPLETE"})
+            if progress: tx.set(*progress)
             tx.update(run_ref, {"state": "COMPLETE", "completed_at": now(), "stage": "A0", "error_code": None})
             tx.update(alert_ref, {"status": "COMPLETE", "current_run_id": run_id,
                 "priority": chain[-1]["output"]["priority"]})
         return complete(self.db.transaction())
+
+    def _bulk_progress(self, tx, case_id, changed_alert_id, changes):
+        if self.dataset_id == DATASET_ID: return
+        query = self.db.collection("alerts").where(filter=firestore.FieldFilter("case_id", "==", case_id))
+        rows = [{"id": doc.id, **doc.to_dict()} for doc in query.stream(transaction=tx)]
+        for row in rows:
+            if row["id"] == changed_alert_id: row.update(changes)
+        rows = [row for row in rows if row.get("dataset_id") == self.dataset_id]
+        from .bulk_jobs import progress_source
+        from .bulk_dataset import corpus
+        value = {**progress_source(corpus().row(case_id)), "dataset_id": self.dataset_id, "case_id": case_id, "alerts": len(rows),
+            "triaged_alerts": sum(row.get("status") == "COMPLETE" for row in rows),
+            "reviewed_alerts": sum(row.get("feedback_revision", 0) > 0 for row in rows)}
+        value.update(triaged=bool(rows) and value["triaged_alerts"] == len(rows),
+            reviewed=bool(rows) and value["reviewed_alerts"] == len(rows))
+        return self.db.collection("bulk_case_progress").document(case_id), value
 
     def daily_control(self):
         day = now().date().isoformat()
@@ -1010,18 +1040,18 @@ class Repository:
             updated = UsageDaily.model_validate({**daily, "limit": request.limit, "live_enabled": request.live_enabled,
                 "credit_verified_until": self.settings.ai_verified_until, "revision": daily["revision"] + 1}).model_dump()
             tx.set(ref, updated)
-            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": self.dataset_id,
                 "action": "DAILY_CONTROL_UPDATED", "object_collection": "usage_daily", "object_id": day,
                 "actor": actor, "occurred_at": now(), "before_hash": content_hash(daily), "after_hash": content_hash(updated)})
             return updated
         return write(self.db.transaction())
 
     def usage_steps(self, run_id=None):
-        query = self.db.collection("step_runs").where(filter=firestore.FieldFilter("run_id" if run_id else "dataset_id", "==", run_id or DATASET_ID))
+        query = self.db.collection("step_runs").where(filter=firestore.FieldFilter("run_id" if run_id else "dataset_id", "==", run_id or self.dataset_id))
         # ponytail: bounded demo scan; use explicit time windows if this grows beyond 10k steps.
         rows = [{"id": doc.id, **doc.to_dict()} for doc in query.limit(10001).stream(timeout=10)]
         if len(rows) > 10000: raise Conflict("Usage window exceeds demo capacity")
-        if any(row.get("dataset_id") != DATASET_ID for row in rows): raise Conflict("Attempt dataset linkage is inconsistent")
+        if any(row.get("dataset_id") != self.dataset_id for row in rows): raise Conflict("Attempt dataset linkage is inconsistent")
         return rows
 
     def reserve_model_attempt(self, step: StepRun) -> bool:
@@ -1032,7 +1062,7 @@ class Repository:
         """
         if (step.state != "STARTED" or step.output is not None or step.retry_delay_seconds is not None
             or step.leg_id not in {"A2", "A3", "A4", "A5", "EVALUATE"}
-            or step.dataset_id != DATASET_ID or not self.settings.is_model_authorized(step.model_id, step.leg_id)
+            or step.dataset_id != self.dataset_id or not self.settings.is_model_authorized(step.model_id, step.leg_id)
             or step.usage_status != "UNKNOWN" or step.cost_status != "UNKNOWN"
             or step.id != stable_id(step.run_id, step.leg_id, step.attempt_number)
             or any(getattr(step, key) is not None for key in ("prompt_tokens", "cached_prompt_tokens", "candidate_tokens",
@@ -1115,19 +1145,20 @@ class Repository:
     def run_detail(self, run_id):
         from .usage import attempt_summary, run_summary, summarize
         parent = self.get("pipeline_runs", run_id)
-        if not parent or parent["dataset_id"] != DATASET_ID: raise LookupError("Run not found")
+        if not parent or parent["dataset_id"] != self.dataset_id: raise LookupError("Run not found")
         children = [self.get("pipeline_runs", ident) for ident in parent.get("child_run_ids", [])]
-        if any(not child or child.get("dataset_id") != DATASET_ID or child.get("parent_run_id") != parent["id"] for child in children):
+        if any(not child or child.get("dataset_id") != self.dataset_id or child.get("parent_run_id") != parent["id"] for child in children):
             raise Conflict("Child run linkage is inconsistent")
         steps = [step for run in (children or [parent]) if run for step in self.usage_steps(run["id"])]
         return {**run_summary(parent), "children": [run_summary(run) for run in children if run],
             "attempts": [attempt_summary(step) for step in sorted(steps, key=lambda s: (s["run_id"], s["started_at"], s["attempt_number"]))],
             "usage": summarize(steps)}
 
-    def enqueue_triage(self, alert_ids, actor, expected_policy_version=None, expected_auto_label_policy_version=None):
+    def enqueue_triage(self, alert_ids, actor, expected_policy_version=None, expected_auto_label_policy_version=None, *, bulk_member=None):
+        if not alert_ids: raise ValueError("Choose at least one alert")
         if len(set(alert_ids)) != len(alert_ids): raise ValueError("Duplicate alert IDs are not allowed")
         alerts = [self.get("alerts", ident) for ident in alert_ids]
-        if any(not alert or alert["dataset_id"] != DATASET_ID for alert in alerts): raise LookupError("Alert not found")
+        if any(not alert or alert["dataset_id"] != self.dataset_id for alert in alerts): raise LookupError("Alert not found")
         case_id = alerts[0]["case_id"]
         if any(alert["case_id"] != case_id for alert in alerts): raise ValueError("Choose alerts from one case")
         self.operational_case(case_id)
@@ -1144,6 +1175,8 @@ class Repository:
             raise Conflict("Policy changed; refresh the investigation queue")
         from .calibration import active_label_policy
         label_policy = active_label_policy(self)
+        if self.dataset_id != DATASET_ID and expected_auto_label_policy_version is None:
+            raise Conflict("Expected corpus A0 policy is required; refresh the investigation queue")
         if expected_auto_label_policy_version is not None and expected_auto_label_policy_version != label_policy["policy_version_id"]:
             raise Conflict("A0 policy changed; refresh the investigation queue")
         bundle_id = self.ensure_baseline(policy["policy_version_id"], label_policy["policy_version_id"])
@@ -1161,8 +1194,17 @@ class Repository:
                 raise Conflict("A0 policy changed; refresh the investigation queue")
             if current_policy["policy_version_id"] != policy["policy_version_id"]:
                 raise Conflict("Policy changed; refresh the investigation queue")
+            member_ref = self.db.collection("bulk_members").document(bulk_member) if bulk_member else None
+            member = member_ref.get(transaction=tx) if member_ref else None
+            if member and member.exists and member.to_dict().get("parent_id"):
+                return member.to_dict()["parent_id"], False
+            if member_ref:
+                if not member.exists: raise Conflict("Batch member disappeared")
+                job = self.db.collection("bulk_jobs").document(member.to_dict()["job_id"]).get(transaction=tx)
+                if not job.exists or job.to_dict()["state"] != "QUEUED": raise Conflict("Batch scheduling paused")
             snapshots = [ref.get(transaction=tx) for ref in refs]
             eligible = {snapshot.id for snapshot in snapshots if snapshot.to_dict().get("feedback_revision", 0) == 0
+                and (not bulk_member or snapshot.to_dict().get("status") not in {"COMPLETE", "RUNNING", "QUEUED"})
                 and (snapshot.to_dict()["rule_id"] != "HIGH_VALUE" or retains_high_value(evidence, current_policy["candidate"]))}
             if set(alert_ids) != eligible:
                 message = "Send all actionable, unfrozen alerts on the selected case; refresh the queue"
@@ -1173,17 +1215,18 @@ class Repository:
             parents = [self.db.collection("pipeline_runs").document(ident).get(transaction=tx) for ident in latest if ident]
             for parent in parents:
                 if parent.exists and parent.to_dict()["state"] in {"QUEUED", "RUNNING"}: return parent.id, False
-            parent = PipelineRun(id=parent_id, dataset_id=DATASET_ID, kind="TRIAGE_BATCH", case_id=case_id,
+            parent = PipelineRun(id=parent_id, dataset_id=self.dataset_id, kind="TRIAGE_BATCH", case_id=case_id,
                 config_bundle_id=bundle_id, actor_uid=actor, child_run_ids=list(children.values())).model_dump()
-            tx.create(self.db.collection("pipeline_runs").document(parent_id), {**parent, "created_at": now()})
+            tx.create(self.db.collection("pipeline_runs").document(parent_id), {**parent, "created_at": now(), "bulk_member": bulk_member})
+            if member_ref: tx.set(member_ref, {"parent_id": parent_id}, merge=True)
             for alert_id in alert_ids:
                 ref = self.db.collection("alerts").document(alert_id)
-                child = PipelineRun(id=children[alert_id], dataset_id=DATASET_ID, kind="TRIAGE_ALERT", parent_run_id=parent_id,
+                child = PipelineRun(id=children[alert_id], dataset_id=self.dataset_id, kind="TRIAGE_ALERT", parent_run_id=parent_id,
                     alert_id=alert_id, case_id=case_id, config_bundle_id=bundle_id, actor_uid=actor).model_dump()
                 tx.create(self.db.collection("pipeline_runs").document(child["id"]), {**child, "created_at": now()})
                 tx.update(ref, {"latest_run_id": child["id"], "latest_parent_run_id": parent_id,
                     "status": "PENDING", "current_run_id": None, "latest_assessment_id": None, "priority": None})
-            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+            tx.create(self.db.collection("audit_events").document(uuid4().hex), {"dataset_id": self.dataset_id,
                 "action": "QUEUED", "object_collection": "pipeline_runs", "object_id": parent_id,
                 "run_id": parent_id, "actor": actor, "occurred_at": now()})
             return parent_id, True
@@ -1191,9 +1234,9 @@ class Repository:
 
     def alert_detail(self, alert_id):
         alert = self.get("alerts", alert_id)
-        if not alert or alert["dataset_id"] != DATASET_ID: raise LookupError("Alert not found")
+        if not alert or alert["dataset_id"] != self.dataset_id: raise LookupError("Alert not found")
         latest = self.get("pipeline_runs", alert["latest_run_id"]) if alert.get("latest_run_id") else None
-        if alert.get("latest_run_id") and (not latest or latest.get("dataset_id") != DATASET_ID or latest.get("alert_id") != alert_id):
+        if alert.get("latest_run_id") and (not latest or latest.get("dataset_id") != self.dataset_id or latest.get("alert_id") != alert_id):
             raise Conflict("Latest run linkage is inconsistent")
         self.operational_case(alert["case_id"])
         from .usage import run_summary

@@ -1,3 +1,15 @@
+## UI revision after candidate preparation
+
+The unified 40,000-transaction queue, 10,000-case reference walkthrough and queue-based review dialogs are newer than archive 4f0b3f719ea98955. The user instructed **do not build**; no replacement package, cloud build or deployment was performed for this revision. Candidates listed below are historical, not the current UI.
+
+## Latest verified local candidate - 18 October 2026
+
+The bulk-learning replacement is [genesis-build-candidate-4f0b3f719ea98955.zip](genesis-build-candidate-4f0b3f719ea98955.zip). SHA-256: `5248dcb0833dce8f9d8d0f184e52399929912c08fe2e7d951fc99abb3bfdf478`; source fingerprint `4f0b3f719ea98955e8234dacadbe289f96b86f89b2745162d1ca2defb173238b`.
+
+114 unit and 20 isolated Firebase integration tests passed (zero integration skips), along with production build, browser journeys and strict design checks. Genuine bulk investigation, user-frozen review and A5 insufficiency were verified; synthetic annotations remain separate. Archive integrity and Cloud Build SDK schema passed.
+
+**PREPARED_NOT_SUBMITTED**: no new cloud image/build/deployment, index application or bulk data publication. Existing private staging revisions remain unchanged. Public repository publication stays on hold. Earlier candidates below are historical.
+
 ## Current local replacement - 18 October 2026
 
 The Evolution rule-intelligence candidate is [genesis-build-candidate-8cacba49b88ce5d1.zip](genesis-build-candidate-8cacba49b88ce5d1.zip). SHA-256: `f40a571425f0cfbae9f463d426730f341c17f6734843afd80d3875caf71a1ad4`.

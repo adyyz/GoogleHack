@@ -34,7 +34,7 @@ LEGS = {
 
 def evolution_prompt_context(context):
     """Ledger hashes stay in the validated snapshot, outside the model token budget."""
-    omitted = {"feedback_events", "reviewed_alerts", "succeeded_steps", "usage_steps", "config_bundle_ids"}
+    omitted = {"feedback_events", "reviewed_alerts", "succeeded_steps", "usage_steps", "config_bundle_ids", "bulk_reference_chunks"}
     projected = {**context, "analytical_inputs": {key: value for key, value in context["analytical_inputs"].items() if key not in omitted}}
     statistics = projected["analytical_inputs"].get("computed_statistics")
     if statistics:
@@ -88,6 +88,22 @@ def evolution_prompt_context(context):
             "review_notes_omitted": sum(len(row.get("notes", "")) > 600 for row in selected),
             "model_outputs_omitted": len(context.get("sealed_model_suggestions", [])) - len(suggestions), "narrative_omitted": narrative_omitted,
             "narrative_policy": "bounded original findings; full sealed output remains private"}
+        if context["analytical_inputs"].get("bulk_reference_chunks"):
+            # Full support remains in immutable chunks; only supplied examples are citable.
+            patterns = context["analytical_inputs"].get("pattern_memory", [])
+            chosen_ids = {row["id"] for row in selected}
+            bounded, per_rule = [], {}
+            for pattern in sorted(patterns, key=lambda row: (-len(row["support_feedback_ids"]), row["rule_id"], row["typology"])):
+                rule = pattern["rule_id"]
+                if per_rule.get(rule, 0) >= 3: continue
+                per_rule[rule] = per_rule.get(rule, 0) + 1
+                ids = [ident for ident in pattern["support_feedback_ids"] if ident in chosen_ids]
+                bounded.append({**pattern, "support_feedback_ids": ids, "support_count": len(pattern["support_feedback_ids"]),
+                    "support_references_omitted": len(pattern["support_feedback_ids"]) - len(ids)})
+            projected["analytical_inputs"]["pattern_memory"] = bounded
+            projected["pattern_memory"] = bounded
+            projected["selection"].update(patterns_omitted=len(patterns) - len(bounded),
+                feedback_omitted=context["analytical_inputs"].get("feedback_examples_omitted", 0) + len(feedback) - len(selected))
     return projected
 
 

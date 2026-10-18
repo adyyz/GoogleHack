@@ -1,7 +1,7 @@
 """Deterministic, forward-validated A0 calibration. No provider or reference labels."""
 from copy import deepcopy
 from google.cloud import firestore
-from .dataset import DATASET_ID, content_hash, stable_id
+from .dataset import content_hash, stable_id
 from .engine import RULES, PROTECTED
 from .repository import Conflict, now
 
@@ -10,8 +10,30 @@ GRID = (0, .10, .25, .40, .60, .65, .75, .90, 1)
 BASELINE = "auto-label-v1"
 
 
+def candidate_record(repo, ident, tx=None):
+    snapshot = repo.db.collection("auto_label_candidates").document(ident).get(transaction=tx)
+    row = {"id": snapshot.id, **snapshot.to_dict()} if snapshot.exists else None
+    if not row or row.get("dataset_id") != repo.dataset_id: raise LookupError("A0 candidate not found")
+    if row.get("training_chunks"):
+        training = []
+        for reference in row["training_chunks"]:
+            chunk = repo.db.collection("auto_label_training_chunks").document(reference["id"]).get(transaction=tx)
+            body = chunk.to_dict() if chunk.exists else None
+            if not body or body.get("dataset_id") != repo.dataset_id or content_hash(body["rows"]) != reference["id"] or len(body["rows"]) != reference["count"]:
+                raise Conflict("A0 training chunk integrity failed")
+            training.extend(body["rows"])
+        row["training"] = training
+    return row
+
+
+def candidate_summary(row):
+    """History reads expose counts, not an unbounded training-reference array."""
+    return {**row, "training_count": row.get("training_count", len(row.get("training", []))),
+        "identity_count": row.get("identity_count", len({item["identity_id"] for item in row.get("training", [])})), "training": []}
+
+
 def active_label_policy(repo, tx=None):
-    doc = repo.db.collection("auto_label_controls").document(DATASET_ID).get(transaction=tx)
+    doc = repo.db.collection("auto_label_controls").document(repo.dataset_id).get(transaction=tx)
     control = doc.to_dict() if doc.exists else {"policy_version_id": BASELINE, "revision": 0}
     if control["policy_version_id"] == BASELINE:
         rules = {rule: {"tp": .25, "fp": .65, "cohort": None} for rule in RULES}
@@ -20,6 +42,8 @@ def active_label_policy(repo, tx=None):
         row = version.to_dict() if version.exists else None
         if not row or row.get("kind") != "AUTO_LABEL_POLICY" or content_hash(row["body"]) != control["policy_version_id"]:
             raise Conflict("A0 policy integrity failed")
+        if row["body"].get("dataset_id", repo.dataset_id) != repo.dataset_id:
+            raise Conflict("A0 policy dataset mismatch")
         rules = row["body"]["rules"]
         if set(rules) != set(RULES) or any(not 0 <= value["tp"] < value["fp"] <= 1 for value in rules.values()):
             raise Conflict("Invalid A0 policy cutoffs")
@@ -84,10 +108,10 @@ def observations(repo, feedback):
     for event in latest.values():
         if event.get("provenance") != "HUMAN_OPERATOR" or event.get("verdict") not in {"TRUE_POSITIVE", "FALSE_POSITIVE"}: continue
         alert = repo.get("alerts", event["alert_id"])
-        if not alert: continue
+        if not alert or alert.get("dataset_id") != repo.dataset_id: continue
         case = repo.operational_case(alert["case_id"])
         run = repo.get("pipeline_runs", event["triage_run_id"])
-        if not run or run.get("state") != "COMPLETE" or run.get("alert_id") != alert["id"]: raise Conflict("Feedback run linkage failed")
+        if not run or run.get("dataset_id") != repo.dataset_id or run.get("state") != "COMPLETE" or run.get("alert_id") != alert["id"] or run.get("case_id") != alert["case_id"]: raise Conflict("Feedback run linkage failed")
         @firestore.transactional
         def read(tx): return repo._sealed_chain(tx, run)
         steps = read(repo.db.transaction(read_only=True))
@@ -96,7 +120,7 @@ def observations(repo, feedback):
         if not isinstance(a0.get("heuristic_score"), (int, float)) or not 0 <= a0["heuristic_score"] <= 1 or alert["rule_id"] in PROTECTED: continue
         bundle = repo.get("config_versions", run["config_bundle_id"])
         original = repo.get("feedback_events", event["id"])
-        if not original: raise Conflict("Supporting feedback disappeared")
+        if not original or original.get("dataset_id") != repo.dataset_id or original.get("case_id") != alert["case_id"]: raise Conflict("Supporting feedback disappeared")
         output.append({"feedback_id": event["id"], "alert_id": alert["id"], "identity_id": case["customer_id"],
             "rule_id": alert["rule_id"], "score": a0["heuristic_score"], "verdict": event["verdict"],
             "submitted_at": event["submitted_at"], "cohort": cohort(bundle), "feedback_hash": content_hash(original)})
@@ -107,9 +131,9 @@ def prepare(repo, snapshot_id, actor):
     context = repo.evolution_context(snapshot_id)  # Integrity and genuine-feedback checks.
     policy = active_label_policy(repo)
     current_cohort = cohort(repo.get("config_versions", repo.ensure_baseline()))
-    rows = observations(repo, context["human_feedback"])
+    rows = observations(repo, repo.calibration_feedback(snapshot_id) if hasattr(repo, "calibration_feedback") else context["human_feedback"])
     overall = context["analytical_inputs"]["sample_sizes"]["conclusive_reviews"]
-    ident = stable_id(DATASET_ID, METHOD, snapshot_id, policy["policy_version_id"], current_cohort)
+    ident = stable_id(repo.dataset_id, METHOD, snapshot_id, policy["policy_version_id"], current_cohort)
     existing = repo.get("auto_label_calibrations", ident)
     if existing: return existing
     candidates, results = [], []
@@ -123,17 +147,27 @@ def prepare(repo, snapshot_id, actor):
         result = {"rule_id": rule, "sample_size": len(selected), "identity_count": len({row["identity_id"] for row in selected}), "verdict_identity_counts": diversity,
             "status": "PROTECTED_OVERRIDE" if rule in PROTECTED else "NO_BENEFICIAL_CANDIDATE" if eligible else "INSUFFICIENT_EVIDENCE"}
         if fitted:
-            candidate = {"id": stable_id(ident, rule), "dataset_id": DATASET_ID, "rule_id": rule,
+            candidate = {"id": stable_id(ident, rule), "dataset_id": repo.dataset_id, "rule_id": rule,
                 "calibration_id": ident, "analytical_snapshot_id": snapshot_id, "method": METHOD,
                 "cohort": current_cohort, "baseline": baseline, **fitted,
                 "training": selected, "training_hash": content_hash(selected), "frozen_at": now(),
                 "state": "PROPOSED", "revision": 0, "validation": None}
             candidate["thresholds"]["cohort"] = current_cohort
             candidate["candidate_hash"] = content_hash({key: candidate[key] for key in ("rule_id", "thresholds", "training_hash", "cohort", "method", "baseline", "frozen_at")})
+            if len(selected) > 200:
+                from google.api_core.exceptions import AlreadyExists
+                chunks = []
+                for start in range(0, len(selected), 200):
+                    rows = selected[start:start + 200]; chunk_id = content_hash(rows)
+                    try: repo.create("auto_label_training_chunks", chunk_id, {"dataset_id": repo.dataset_id, "rows": rows})
+                    except AlreadyExists:
+                        if repo.get("auto_label_training_chunks", chunk_id).get("rows") != rows: raise Conflict("A0 training chunk changed")
+                    chunks.append({"id": chunk_id, "count": len(rows)})
+                candidate.update(training=[], training_chunks=chunks, training_count=len(selected), identity_count=len({row["identity_id"] for row in selected}))
             candidates.append(candidate)
             result.update(status="AWAITING_NEW_REVIEWS", candidate_id=candidate["id"])
         results.append(result)
-    record = {"id": ident, "dataset_id": DATASET_ID, "created_at": now(), "actor": actor,
+    record = {"id": ident, "dataset_id": repo.dataset_id, "created_at": now(), "actor": actor,
         "analytical_snapshot_id": snapshot_id, "method": METHOD, "overall_reviews": overall, "results": results}
     @firestore.transactional
     def persist(tx):
@@ -142,7 +176,7 @@ def prepare(repo, snapshot_id, actor):
         if found.exists: return {"id": found.id, **found.to_dict()}
         pending = []
         for item in candidates:
-            lock = repo.db.collection("auto_label_pending").document(DATASET_ID + '-' + item["rule_id"])
+            lock = repo.db.collection("auto_label_pending").document(repo.dataset_id + '-' + item["rule_id"])
             prior = lock.get(transaction=tx)
             prior_row = repo.db.collection("auto_label_candidates").document(prior.to_dict()["candidate_id"]).get(transaction=tx) if prior.exists else None
             if prior_row and prior_row.exists and prior_row.to_dict()["state"] in {"PROPOSED", "APPROVED"}:
@@ -159,7 +193,7 @@ def prepare(repo, snapshot_id, actor):
 
 def _audit(repo, tx, action, ident, actor, **values):
     from uuid import uuid4
-    tx.create(repo.db.collection("audit_events").document(uuid4().hex), {"dataset_id": DATASET_ID,
+    tx.create(repo.db.collection("audit_events").document(uuid4().hex), {"dataset_id": repo.dataset_id,
         "action": action, "object_collection": "auto_label_candidates", "object_id": ident,
         "actor": actor, "occurred_at": now(), **values})
 
@@ -188,14 +222,13 @@ def verify_references(repo, tx, observations):
     for observation in observations:
         event = repo.db.collection("feedback_events").document(observation["feedback_id"]).get(transaction=tx)
         value = {"id": event.id, **event.to_dict()} if event.exists else None
-        if (not value or value.get("provenance") != "HUMAN_OPERATOR" or content_hash(value) != observation["feedback_hash"]
+        if (not value or value.get("dataset_id") != repo.dataset_id or value.get("provenance") != "HUMAN_OPERATOR" or content_hash(value) != observation["feedback_hash"]
             or value.get("verdict") != observation["verdict"] or value.get("alert_id") != observation["alert_id"]):
             raise Conflict("Supporting genuine feedback changed")
 
 
 def validate_candidate(repo, ident, actor):
-    candidate = repo.get("auto_label_candidates", ident)
-    if not candidate: raise LookupError("A0 candidate not found")
+    candidate = candidate_record(repo, ident)
     check_candidate(candidate)
     if candidate["validation"]: return candidate
     if candidate["state"] != "PROPOSED": raise Conflict("Only a proposed candidate can collect validation")
@@ -231,9 +264,7 @@ def decision(repo, ident, request, actor, action):
     @firestore.transactional
     def write(tx):
         ref = repo.db.collection("auto_label_candidates").document(ident)
-        snapshot = ref.get(transaction=tx)
-        row = snapshot.to_dict() if snapshot.exists else None
-        if not row: raise LookupError("A0 candidate not found")
+        row = candidate_record(repo, ident, tx)
         check_candidate(row)
         if row["revision"] != request.expected_revision: raise Conflict("Candidate changed; refresh")
         policy = active_label_policy(repo, tx)
@@ -259,27 +290,27 @@ def decision(repo, ident, request, actor, action):
                 if content_hash(row["training"]) != row["training_hash"] or content_hash(row["validation"]["rows"]) != row["validation"]["content_hash"]:
                     raise Conflict("Calibration evidence integrity failed")
                 rules = deepcopy(policy["rules"]); rules[row["rule_id"]] = row["thresholds"]
-                body = {"method": METHOD, "rules": rules}; target = content_hash(body)
+                body = {"method": METHOD, "rules": rules, "dataset_id": repo.dataset_id}; target = content_hash(body)
                 version_ref = repo.db.collection("config_versions").document(target)
                 version = version_ref.get(transaction=tx)
                 if version.exists and version.to_dict().get("body") != body: raise Conflict("A0 version changed")
                 if not version.exists: tx.create(version_ref, {"kind": "AUTO_LABEL_POLICY", "body": body, "content_hash": target, "created_at": now()})
                 changes.update(state="APPLIED", applied_policy_id=target, previous_policy_id=policy["policy_version_id"], applied_at=now())
-            tx.set(repo.db.collection("auto_label_controls").document(DATASET_ID), {"policy_version_id": target, "revision": policy["revision"] + 1})
+            tx.set(repo.db.collection("auto_label_controls").document(repo.dataset_id), {"policy_version_id": target, "revision": policy["revision"] + 1})
         tx.update(ref, changes); _audit(repo, tx, 'A0_' + action.upper(), ident, actor, notes=request.notes)
         return {**row, **changes}
     return repo._contended_transaction(write)
 
 
 def reassess(repo, ident, request, actor):
-    candidate = repo.get("auto_label_candidates", ident)
-    if not candidate or candidate["state"] not in {"APPLIED", "ROLLED_BACK"}: raise Conflict("Applied or rolled-back candidate required")
+    candidate = candidate_record(repo, ident)
+    if not candidate or candidate.get("dataset_id") != repo.dataset_id or candidate["state"] not in {"APPLIED", "ROLLED_BACK"}: raise Conflict("Applied or rolled-back candidate required")
     check_candidate(candidate)
     if candidate["revision"] != request.expected_revision: raise Conflict("Candidate changed")
     policy = active_label_policy(repo)
     target = candidate["applied_policy_id"] if candidate["state"] == "APPLIED" else candidate["previous_policy_id"]
     if policy["policy_version_id"] != target or request.expected_policy_version != target: raise Conflict("A0 policy changed")
-    allowed_cases = {row["id"] for row in repo.list("cases") if row.get("split") in {"DEMO", "CALIBRATION_DISCOVERY"}}
+    allowed_cases = repo.operational_case_ids() if hasattr(repo, "operational_case_ids") else {row["id"] for row in repo.list("cases") if row.get("split") in {"DEMO", "CALIBRATION_DISCOVERY"}}
     alerts = sorted((row for row in repo.list("alerts") if row["case_id"] in allowed_cases and row["rule_id"] == candidate["rule_id"]
         and row["id"] > (request.cursor or "")), key=lambda row: row["id"])
     page = alerts[:50]; results = []
@@ -323,7 +354,7 @@ def reassess(repo, ident, request, actor):
             if fresh.get("feedback_revision", 0) or fresh.get("current_run_id") != run["id"] or fresh.get("latest_run_id") != run["id"] or fresh.get("status") != "COMPLETE" or fresh.get("latest_assessment_id") != prior_id:
                 return {"alert_id": alert["id"], "state": "SKIPPED", "reason": "Alert changed concurrently"}
             if existing.exists and existing.to_dict()["content_hash"] != content_hash(body): raise Conflict("Assessment integrity failed")
-            if not existing.exists: tx.create(assessment_ref, {"id": assessment_id, "dataset_id": DATASET_ID, "body": body, "content_hash": content_hash(body), "created_at": now()})
+            if not existing.exists: tx.create(assessment_ref, {"id": assessment_id, "dataset_id": repo.dataset_id, "body": body, "content_hash": content_hash(body), "created_at": now()})
             tx.update(ref, {"latest_assessment_id": assessment_id})
             _audit(repo, tx, "A0_RESTORED" if restoring else "A0_REASSESSED", assessment_id, actor, notes=request.notes)
             return {"alert_id": alert["id"], "state": "SUCCEEDED", "assessment_id": assessment_id}

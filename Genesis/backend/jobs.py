@@ -3,7 +3,7 @@ import argparse
 import json
 from time import monotonic, sleep
 
-from .dataset import DATASET_ID, content_hash, stable_id
+from .dataset import content_hash, stable_id
 from .engine import AUTO_LABEL_VERSION, WEIGHTS, auto_label, enrich, prioritize, risk_assessment
 from .gateway import GatewayResult, generate_json
 from .models import StepRun, retry_allowed
@@ -121,7 +121,7 @@ def _child(repo, child, data, lease=None):
     start, clock = now(), monotonic()
     evidence = enrich(data, data.cases[child["case_id"]])
     risk = risk_assessment(evidence)
-    base = {"dataset_id": DATASET_ID, "run_id": ident, "alert_id": child["alert_id"],
+    base = {"dataset_id": repo.dataset_id, "run_id": ident, "alert_id": child["alert_id"],
         "case_id": child["case_id"], "config_bundle_id": child["config_bundle_id"],
         "input_hash": content_hash(evidence), "selected_evidence_ids": evidence["evidence_ids"]}
     previous_id = stable_id(ident, "A1", 1)
@@ -213,13 +213,14 @@ def run_local(repo, parent_id):
 def worker_once(repo):
     if repo.settings.mode != "local": raise RuntimeError("This worker supports only loopback emulators")
     if not repo.settings.local_gemini_enabled: raise RuntimeError("Opt in to local Gemini before starting this worker")
-    page = repo.page("pipeline_runs", 100, filters=[("kind", "TRIAGE_BATCH"), ("state", "QUEUED"), ("dataset_id", DATASET_ID)])
-    count = sum(run_local(repo, run["id"]) for run in page["items"])
-    remaining = 100 - len(page["items"])
-    if remaining:
-        evolution = repo.page("pipeline_runs", remaining, filters=[("kind", "EVOLUTION"), ("state", "QUEUED"), ("dataset_id", DATASET_ID)])
-        count += sum(run_evolution(repo, run["id"]) for run in evolution["items"])
-    return count
+    from .bulk_jobs import advance, scoped
+    from .bulk_dataset import ID as BULK_ID
+    for job in repo.page("bulk_jobs", 50, filters=[("state", "QUEUED"), ("dataset_id", BULK_ID)])["items"]: advance(repo, job["id"])
+    bulk_runs = repo.page("pipeline_runs", 100, filters=[("kind", "TRIAGE_BATCH"), ("state", "QUEUED"), ("dataset_id", BULK_ID)])
+    bulk_count = sum(run_local(scoped(repo, run), run["id"]) for run in bulk_runs["items"])
+    bulk_evolution = repo.page("pipeline_runs", 100, filters=[("kind", "EVOLUTION"), ("state", "QUEUED"), ("dataset_id", BULK_ID)])
+    bulk_count += sum(run_evolution(scoped(repo, run), run["id"]) for run in bulk_evolution["items"])
+    return bulk_count
 
 
 def _evolution_leg(repo, run, step, context):
@@ -248,7 +249,7 @@ def _run_evolution(repo, run_id, lease=None):
     run = repo.get("pipeline_runs", run_id)
     _update(repo, run_id, {"state": "RUNNING", "stage": "A5"}, lease)
     profile = _leg_profile(repo, run["config_bundle_id"], "A5")
-    step = StepRun(id=stable_id(run_id, "A5", 1), dataset_id=DATASET_ID, run_id=run_id, leg_id="A5", state="STARTED",
+    step = StepRun(id=stable_id(run_id, "A5", 1), dataset_id=repo.dataset_id, run_id=run_id, leg_id="A5", state="STARTED",
         config_bundle_id=run["config_bundle_id"], started_at=now(), input_hash=run["analytical_snapshot_id"],
         model_id=profile.model_id, usage_status="UNKNOWN", cost_status="UNKNOWN",
         execution_provenance="UNKNOWN", worker_lease=lease)
@@ -285,16 +286,33 @@ def run_delivery(repo, lease):
     if run["kind"] == "TRIAGE_BATCH": _run_batch(repo, lease.run_id, lease)
     elif run["kind"] == "EVOLUTION": _run_evolution(repo, lease.run_id, lease)
     else: raise Conflict("WORKER_RUN_INVALID")
+    member_id = run.get("bulk_member")
+    if member_id:
+        from .bulk_jobs import advance
+        member = repo.get("bulk_members", member_id)
+        advance(Repository(repo.settings), member["job_id"])
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process bounded persisted work, then exit.")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--once", action="store_true")
+    mode.add_argument("--watch", action="store_true")
     mode.add_argument("--delivery", action="store_true")
     args = parser.parse_args()
     from .config import Settings
-    if args.once:
+    if args.watch:
+        repo = Repository(Settings.load())
+        if not repo.settings.local_gemini_valid(): raise SystemExit("Verified temporary local Free Tier access is required")
+        from .models import DailyControlRequest
+        try:
+            while repo.settings.local_gemini_valid():
+                worker_once(repo)
+                sleep(2)
+        finally:
+            daily = repo.daily_control()
+            repo.update_daily_control(DailyControlRequest(expected_revision=daily["revision"], live_enabled=False, limit=daily["limit"]), "local-worker")
+    elif args.once:
         print(json.dumps({"processed_parent_runs": worker_once(Repository(Settings.load()))}))
     else:
         import sys
@@ -302,6 +320,8 @@ if __name__ == "__main__":
         try:
             lease = WorkerLease.model_validate_json(sys.stdin.read(10000))
             repo = Repository(Settings.load())
+            from .bulk_jobs import scoped
+            repo = scoped(repo, repo.get("pipeline_runs", lease.run_id))
             run_delivery(repo, lease)
             print(json.dumps({"state": repo.get("pipeline_runs", lease.run_id)["state"]}))
         except Exception:

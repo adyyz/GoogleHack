@@ -66,11 +66,15 @@ def create_app(settings=None):
     def deliver(body: Delivery):
         try:
             repo = Repository(settings)
+            from .bulk_jobs import scoped
+            repo = scoped(repo, repo.get("pipeline_runs", body.run_id))
             claim = repo.claim_delivery(body.run_id, body.generation, uuid4().hex)
             if claim["status"] == "BUSY": raise HTTPException(503, "WORKER_LEASE_BUSY")
             if claim["status"] in {"STALE", "TERMINAL"}: return {"status": claim["status"]}
             return execute_delivery(repo, claim["lease"])
         except HTTPException: raise
+        except LookupError:
+            raise HTTPException(404, "WORKER_RUN_NOT_FOUND") from None
         except Conflict:
             raise HTTPException(409, "WORKER_CLAIM_CONFLICT") from None
         except Exception:

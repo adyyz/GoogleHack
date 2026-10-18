@@ -166,7 +166,7 @@ def genuine_reference_double():
     put("simulations", freeze_id, {"dataset_id": DATASET_ID, "state": "COMPLETE", "freeze_id": freeze_id,
         "freeze_hash": freeze_hash, "candidate_hash": candidate_hash, "metrics": {"pure_memory_fixture": True},
         "started_at": instant + timedelta(seconds=1)})
-    repo = SimpleNamespace(get=lambda collection, ident: deepcopy(store.get((collection, ident))),
+    repo = SimpleNamespace(dataset_id=DATASET_ID, get=lambda collection, ident: deepcopy(store.get((collection, ident))),
         settings=SimpleNamespace(operator_uids=frozenset({"human"})))
     repo._leg_step = lambda _tx, selected, leg: repo.get("step_runs", legs[selected["id"], leg]) or {}
     repo._sealed_chain = MethodType(Repository._sealed_chain, repo)

@@ -75,6 +75,15 @@ def test_closed_gate_and_oversize_precount_never_generate(monkeypatch):
     assert calls == []
 
 
+def test_structured_evaluation_is_pinned_and_validated(monkeypatch):
+    repo, step, calls = setup(monkeypatch, text='{"status":"OK"}')
+    repo.get = lambda *_args: {'body': {'structured_output': True}}
+    result = generate_json(repo, step, 'Test prompt', SmokeReply, input_limit=512, output_limit=128, structured_output=True)
+    assert result.outcome == 'SUCCEEDED'
+    assert calls[1][1]['config']['response_json_schema'] == SmokeReply.model_json_schema()
+    assert repo.reservations[0].input_snapshot['generation_config']['response_json_schema'] == SmokeReply.model_json_schema()
+
+
 def test_invalid_output_is_not_stored_as_model_output(monkeypatch):
     repo, step, calls = setup(monkeypatch)
     result = generate_json(repo, step, "Test prompt", SmokeReply, input_limit=512, output_limit=128)

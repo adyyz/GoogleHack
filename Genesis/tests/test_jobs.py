@@ -16,7 +16,7 @@ def test_closed_a5_worker_seals_refusal_without_model_output():
     class Ref:
         def __init__(self, collection, ident): self.key = collection, ident
         def update(self, data): rows[self.key].update(data)
-    repo = SimpleNamespace(settings=SimpleNamespace(active_model_id="unused", ai_authorized=lambda: False),
+    repo = SimpleNamespace(dataset_id=DATASET_ID, settings=SimpleNamespace(active_model_id="unused", ai_authorized=lambda: False),
         claim_batch=lambda _ident, kind: kind == "EVOLUTION", get=lambda collection, ident: rows.get((collection, ident)),
         evolution_context=lambda _ident: {}, create=lambda collection, ident, data: rows.__setitem__((collection, ident), data),
         db=SimpleNamespace(collection=lambda collection: SimpleNamespace(document=lambda ident: Ref(collection, ident))))

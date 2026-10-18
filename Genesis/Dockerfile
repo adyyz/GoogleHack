@@ -24,6 +24,8 @@ ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
     APP_MODE=cloud LIVE_AI_ENABLED=false CREDITS_VERIFIED=false LOCAL_GEMINI_ENABLED=false
 COPY --from=dependencies --chown=65532:65532 /app/.venv /app/.venv
 COPY --chown=65532:65532 backend ./backend
+RUN python -m backend.bulk_dataset --output /app/generated/bulk > /dev/null
+ENV GENESIS_BULK_DIR=/app/generated/bulk
 USER 65532:65532
 
 # One-shot emulator worker only. This is not the Cloud Tasks HTTP worker.

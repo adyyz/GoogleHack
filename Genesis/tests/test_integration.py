@@ -16,6 +16,25 @@ FIRESTORE_URL = _loopback_endpoint("FIRESTORE_EMULATOR_HOST")
 pytestmark = pytest.mark.skipif(not AUTH_URL or not FIRESTORE_URL, reason="Run npm run test:integration with loopback emulators")
 
 
+def _corpus_case_repo(settings, *, multi=False):
+    """Fresh operational corpus source for worker checks, never a reference cohort."""
+    from backend.bulk_dataset import corpus, generate
+    from backend.bulk_jobs import BulkRepository
+    generate()
+    cursor = 0
+    while cursor is not None:
+        page = corpus().page(limit=100, cursor=cursor)
+        for row in page["items"]:
+            if not row["rules"] or (len(row["rules"]) > 1) != multi: continue
+            worker = BulkRepository(settings, row["id"])
+            case = corpus().case(row["id"])
+            if any(worker.get("alerts", alert["id"]) for alert in case["alerts"]): continue
+            worker.materialize()
+            return worker, case
+        cursor = page["next_cursor"]
+    raise AssertionError("No unused corpus fixture case")
+
+
 def test_private_discovery_scope_preserves_publication_and_denies_reserved_cases():
     from backend.config import Settings
     from backend.repository import Repository, Conflict
@@ -35,7 +54,8 @@ def test_private_discovery_scope_preserves_publication_and_denies_reserved_cases
     assert len(repo.list('pipeline_runs')) == count
 
 
-def test_a0_policy_transaction_uses_isolated_eligibility_double_and_preserves_versions(monkeypatch):
+@pytest.mark.parametrize("corpus_scope", [False, True])
+def test_a0_policy_transaction_uses_isolated_eligibility_double_and_preserves_versions(monkeypatch, corpus_scope):
     """No model output or human verdict is created. Only transaction eligibility is doubled."""
     from copy import deepcopy
     from datetime import timedelta
@@ -46,7 +66,9 @@ def test_a0_policy_transaction_uses_isolated_eligibility_double_and_preserves_ve
     from backend.dataset import DATASET_ID, content_hash
     from backend.models import PolicyChangeRequest, RecommendationReviewRequest
     from backend.repository import Repository, now, Conflict
-    repo = Repository(Settings.load()); client = repo.db
+    from backend.bulk_dataset import ID as CORPUS_ID
+    dataset_id = CORPUS_ID if corpus_scope else DATASET_ID
+    repo = Repository(Settings.load(), dataset_id); client = repo.db
     prefix = 'a0_transactions_TEST_ONLY_' + uuid4().hex + '_'
     repo.db = SimpleNamespace(collection=lambda name: client.collection(prefix + name), transaction=client.transaction)
     frozen = now()
@@ -56,7 +78,7 @@ def test_a0_policy_transaction_uses_isolated_eligibility_double_and_preserves_ve
     forward = [{**training[index], 'identity_id': 'new-' + str(index), 'cohort': 'TEST_ONLY', 'submitted_at': frozen + timedelta(seconds=1)} for index in [0, 1, 2, 13, 14]]
     validation = {'rows': forward, 'content_hash': content_hash(forward), 'before': calibration.measured(forward, baseline, baseline),
         'after': calibration.measured(forward, thresholds, baseline), 'passed': True, 'provenance': 'PROSPECTIVE_HUMAN_REVIEWS'}
-    row = {'id': uuid4().hex[:24], 'dataset_id': DATASET_ID, 'rule_id': 'HIGH_VALUE', 'state': 'PROPOSED', 'revision': 0,
+    row = {'id': uuid4().hex[:24], 'dataset_id': dataset_id, 'rule_id': 'HIGH_VALUE', 'state': 'PROPOSED', 'revision': 0,
         'method': calibration.METHOD, 'cohort': 'TEST_ONLY', 'training': training, 'training_hash': content_hash(training),
         'baseline': baseline, 'thresholds': thresholds, 'validation': None, 'frozen_at': frozen}
     row['candidate_hash'] = content_hash({key: row[key] for key in ('rule_id', 'thresholds', 'training_hash', 'cohort', 'method', 'baseline', 'frozen_at')})
@@ -73,17 +95,21 @@ def test_a0_policy_transaction_uses_isolated_eligibility_double_and_preserves_ve
     applied = calibration.decision(repo, row['id'], PolicyChangeRequest(expected_revision=1, expected_policy_revision=0, notes='TEST_ONLY'), 'test', 'apply')
     policy = calibration.active_label_policy(repo)
     assert policy['rules']['HIGH_VALUE'] == thresholds and policy['revision'] == 1
+    other = Repository(repo.settings, DATASET_ID if corpus_scope else CORPUS_ID); other.db = repo.db
+    assert calibration.active_label_policy(other)['revision'] == 0
+    with pytest.raises(LookupError):
+        calibration.decision(other, row['id'], PolicyChangeRequest(expected_revision=2, expected_policy_revision=0, notes='TEST_ONLY'), 'test', 'rollback')
     version = deepcopy(repo.get('config_versions', applied['applied_policy_id']))
     # Namespaced transaction mechanics only: sealed evidence is supplied in memory,
     # never written to the model ledger or counted as a human review.
     from backend.models import ReassessmentRequest
-    source = {'id': 'case', 'dataset_id': DATASET_ID, 'split': 'DEMO'}
+    source = {'id': 'case', 'dataset_id': dataset_id, 'split': 'DEMO'}
     repo.create('cases', 'case', source)
     for index in [1, 2]:
         alert_id = str(index) * 24
-        repo.create('alerts', alert_id, {'id': alert_id, 'dataset_id': DATASET_ID, 'case_id': 'case', 'rule_id': 'HIGH_VALUE',
+        repo.create('alerts', alert_id, {'id': alert_id, 'dataset_id': dataset_id, 'case_id': 'case', 'rule_id': 'HIGH_VALUE',
             'status': 'COMPLETE', 'feedback_revision': index - 1, 'current_run_id': 'run', 'latest_run_id': 'run'})
-    repo.create('pipeline_runs', 'run', {'id': 'run', 'dataset_id': DATASET_ID, 'config_bundle_id': 'TEST_ONLY'})
+    repo.create('pipeline_runs', 'run', {'id': 'run', 'dataset_id': dataset_id, 'config_bundle_id': 'TEST_ONLY'})
     monkeypatch.setattr(repo, '_sealed_chain', lambda *_: [{'leg_id': 'A0', 'output': {'predicted_verdict': 'AUTO_UNCERTAIN',
         'heuristic_score': .5, 'requires_context_or_protected_review': False, 'score_is_probability': False}}])
     monkeypatch.setattr(calibration, 'cohort', lambda *_: 'TEST_ONLY')
@@ -175,19 +201,10 @@ def test_seed_publication_auth_and_persistence():
     with TestClient(app) as client:
         assert client.get("/api/health").json()["live_ai_enabled"] is False
         assert client.get("/api/config").json()["firebase_web_api_key"] is None
-        assert client.get("/api/demo/dashboard").json()["case_count"] == 112
-        response = client.get("/api/demo/alerts")
-        assert response.headers["cache-control"] == "public, max-age=60"
-        cases = response.json()["cases"]
-        assert len(cases) == 12
-        assert all(case["queue_priority"] and case["queue_reason"] for case in cases)
-        assert "reference_labels" not in response.text
-        assert "reference_reasons" not in response.text
-        assert "operator-demo" not in response.text
-        assert client.get("/api/demo/alerts/unpublished-case").status_code == 404
-        assert client.get("/api/operator/session").status_code == 401
-        assert client.get("/api/operator/audit").status_code == 401
-        assert client.post("/api/operator/triage-jobs").status_code == 401
+        cases = repo.publication()["public_cases"]
+        for path in ["/api/demo/dashboard", "/api/demo/alerts", "/api/demo/manifest", "/api/operator/cases", "/api/operator/queue-summary", "/api/operator/evaluation", "/api/operator/evolution/rule-matrix"]:
+            assert client.get(path).status_code == 404
+        assert client.post("/api/operator/triage-jobs", json={"alert_ids": []}).status_code == 404
         private_routes = [(method, route.path) for route in app.routes if getattr(route, "path", "").startswith(("/api/operator/", "/api/admin/"))
             for method in route.methods if method in {"GET", "POST", "PUT", "PATCH", "DELETE"}]
         import re
@@ -197,7 +214,7 @@ def test_seed_publication_auth_and_persistence():
                 denied = client.request(method, target, headers=identity, json={} if method != "GET" else None)
                 assert denied.status_code == 401, (method, path)
                 assert denied.headers["cache-control"] == "no-store"
-        assert client.get("/api/operator/evaluation", headers={"Authorization": "Bearer invalid"}).status_code == 401
+        assert client.get("/api/operator/evaluation", headers={"Authorization": "Bearer invalid"}).status_code == 404
 
         login = httpx.post(f"{AUTH_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=emulator-only",
             json={"email": "operator@aml-insight.test", "password": "local-demo-only", "returnSecureToken": True})
@@ -231,103 +248,17 @@ def test_seed_publication_auth_and_persistence():
             assert operator_client.get("/api/operator/usage", headers=headers).status_code == 200
             assert operator_client.put("/api/admin/usage-daily", headers=headers,
                 json={"expected_revision": changed.json()["revision"], "live_enabled": False, "limit": 99}).status_code == 403
-        audit = client.get("/api/operator/audit?limit=1", headers=headers).json()
-        assert len(audit["items"]) == 1
-        if audit["next_cursor"]:
-            following = client.get('/api/operator/audit', params={"cursor": audit["next_cursor"], "limit": 1}, headers=headers).json()
-            assert all(row["id"] != audit["items"][0]["id"] for row in following["items"])
-        assert client.post("/api/operator/triage-jobs", headers=headers).status_code == 422
-        multi = next(case for case in cases if len(case["alerts"]) > 1)
-        alert_ids = [alert["id"] for alert in multi["alerts"]]
-        assert client.post("/api/operator/triage-jobs", headers=headers, json={"alert_ids": alert_ids[:1]}).status_code == 422
-        assert client.post("/api/operator/triage-jobs", headers=headers, json={"alert_ids": [alert_ids[0]] * 2}).status_code == 422
-        # Concurrent enqueues share a parent before the local worker starts.
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            enqueues = list(pool.map(lambda _: repo.enqueue_triage(alert_ids, "operator-demo"), range(2)))
-        assert enqueues[0][0] == enqueues[1][0]
-        assert sum(created for _, created in enqueues) == 1
-        queued = client.post("/api/operator/triage-jobs", headers=headers, json={"alert_ids": alert_ids}).json()
-        assert queued["state"] == "QUEUED"
-        from backend.jobs import run_local
-        run_local(repo, queued["id"])
-        failed = client.get(f'/api/operator/runs/{queued["id"]}', headers=headers).json()
-        assert failed["state"] == "FAILED" and failed["error_code"] == "AI_NOT_CONNECTED"
-        assert len(failed["children"]) == len(alert_ids)
-        assert len(failed["attempts"]) == 2 * len(alert_ids)
-        assert {step["leg_id"] for step in failed["attempts"]} == {"A1", "A2"}
-        assert all(step["usage_status"] == "NOT_APPLICABLE" and step["total_tokens"] is None for step in failed["attempts"])
-        for ident in alert_ids:
-            private = client.get(f'/api/operator/alerts/{ident}', headers=headers).json()
-            assert private["latest_run"]["error_code"] == "AI_NOT_CONNECTED"
-            assert private["alert"]["status"] == "PENDING" and not private["alert"]["current_run_id"]
-            assert private["outputs"] == {}
-        assert client.get("/api/operator/usage", headers=headers).json()["daily"]["attempts_reserved"] == 0
-        public_usage = client.get("/api/demo/usage")
-        assert public_usage.json()["not_applicable_attempts"] == 2 * len(alert_ids)
-        for private_key in ["case_id", "alert_id", "provider_usage_raw", "provider_request_id", "output", "operator-demo"]:
-            assert private_key not in public_usage.text
-        assert client.get("/api/operator/runs?limit=1", headers=headers).json()["next_cursor"]
-        assert client.get(f'/api/operator/alerts/{alert_ids[0]}/feedback', headers=headers).json()["items"] == []
-        terminal = client.post("/api/operator/triage-jobs", headers=headers, json={"alert_ids": alert_ids})
-        assert terminal.status_code == 200 and terminal.json()["state"] == "FAILED"
-        diagnostic = client.get("/api/operator/evaluation", headers=headers)
-        assert diagnostic.status_code == 200
-        assert len(diagnostic.json()["discovery_preview"]) == 3
-        assert all(row["split"] == "CALIBRATION_DISCOVERY" for row in diagnostic.json()["discovery_preview"])
-
-        alert = next(c["alerts"][0] for c in cases if c["alerts"])
-        result = client.post(f'/api/operator/alerts/{alert["id"]}/feedback', headers=headers,
-            json={"verdict": "INCONCLUSIVE", "notes": "Missing validated AI output", "expected_revision": 0})
-        assert result.status_code == 409  # No fake completed run can accept feedback.
+        assert client.get("/api/operator/runs", headers=headers).json()["items"] == []
+        for resource in ["usage", "runs", "audit"]:
+            assert client.get(f"/api/operator/{resource}?scope=archive", headers=headers).status_code == 422
+        # Existing historical records remain stored but are not reachable by direct IDs.
+        legacy_alert = cases[0]["alerts"][0]["id"]
+        for suffix in ["", "/feedback"]:
+            assert client.get(f"/api/operator/alerts/{legacy_alert}{suffix}", headers=headers).status_code == 404
+        assert client.post(f"/api/operator/alerts/{legacy_alert}/feedback", headers=headers,
+            json={"verdict": "INCONCLUSIVE", "notes": "Denied legacy write", "expected_revision": 0}).status_code == 404
         assert repo.list("feedback_events") == []
-
-        snapshot_url = "/api/operator/evolution/snapshots"
-        assert client.post(snapshot_url).status_code == 401
-        assert client.get(snapshot_url).status_code == 401
-        first_snapshot = client.post(snapshot_url, headers=headers)
-        assert first_snapshot.status_code == 200
-        snapshot = first_snapshot.json()
-        assert snapshot["body"]["sample_sizes"]["conclusive_reviews"] == 0
-        assert snapshot["body"]["detector_gate"]["status"] == "INSUFFICIENT_EVIDENCE"
-        assert snapshot["body"]["usage"]["total_tokens"] is None
-        assert snapshot["body"]["succeeded_steps"]  # Real deterministic A1 records only.
-        assert client.post(snapshot_url, headers=headers).json() == snapshot
-        history = client.get(snapshot_url + "?limit=1", headers=headers).json()
-        assert history["items"][0]["id"] == snapshot["id"] and history["next_cursor"] is None
-        assert client.get(snapshot_url + "?limit=101", headers=headers).status_code == 422
-        freezes = [event for event in repo.list("audit_events") if event["action"] == "ANALYTICAL_INPUTS_FROZEN"]
-        assert len(freezes) == 1
-        assert "reference_labels" not in first_snapshot.text and "reference_reasons" not in first_snapshot.text
-        a5_url = "/api/operator/evolution/runs"
-        assert client.post(a5_url, json={"snapshot_id": snapshot["id"]}).status_code == 401
-        before_a5 = len(repo.list("pipeline_runs"))
-        absent_feedback = client.post(a5_url, headers=headers, json={"snapshot_id": snapshot["id"]})
-        assert absent_feedback.status_code == 409 and "Genuine analyst feedback" in absent_feedback.text
-        assert len(repo.list("pipeline_runs")) == before_a5
-        assert client.post(a5_url, headers=headers, json={"snapshot_id": "0" * 64}).status_code == 404
-        freeze_url = "/api/operator/evolution/freezes"
-        option = diagnostic.json()["freeze_options"][0]
-        freeze_request = {"candidate_id": option["candidate"]["id"], "expected_candidate_hash": option["candidate_hash"],
-            "evolution_run_id": "0" * 24, "notes": "Refusal boundary test; no actual selection"}
-        assert client.post(freeze_url, json=freeze_request).status_code == 401
-        assert client.post(freeze_url, headers=headers, json=freeze_request).status_code == 409
-        assert client.post(freeze_url, headers=headers, json={**freeze_request, "expected_candidate_hash": "0" * 64}).status_code == 409
-        assert repo.list("candidate_freezes") == [] and repo.list("simulations") == []
-        assert client.post(freeze_url + "/missing/simulation", headers=headers).status_code == 404
-        assert client.get(a5_url + "/missing", headers=headers).status_code == 404
-        assert client.get(a5_url, headers=headers).json()["items"] == []
-        assert client.get(a5_url).status_code == 401
-        assert client.get("/api/operator/evolution/freeze", headers=headers).json() == {"freeze": None, "simulation": None}
-        assert client.get("/api/operator/evolution/freeze").status_code == 401
-        candidates = client.get("/api/operator/evolution/candidates", headers=headers)
-        assert candidates.status_code == 200 and len(candidates.json()["options"]) == 3
-        assert candidates.headers["cache-control"] == "no-store" and "Authorization" in candidates.headers["vary"]
-        assert client.get("/api/operator/evolution/candidates").status_code == 401
-        review_url = "/api/operator/evolution/recommendations/missing/review"
-        review = {"expected_revision": 0, "state": "APPROVED", "notes": "No proposal exists"}
-        assert client.put(review_url, json=review).status_code == 401
-        assert client.put(review_url, headers=headers, json=review).status_code == 404
+        snapshot_url = "/api/operator/bulk/snapshots"
 
         signup = httpx.post(f"{AUTH_URL}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=emulator-only",
             json={"returnSecureToken": True})
@@ -473,7 +404,7 @@ def test_opt_in_worker_queues_claims_and_preserves_unknown_outcome(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-not-a-credential")
     settings = replace(Settings.load(), local_gemini_enabled=True, local_gemini_free_verified=True,
         local_gemini_verified_until=now() + timedelta(hours=1))
-    repo = Repository(settings)
+    repo, case = _corpus_case_repo(settings)
     calls = []
 
     class FaultClient:
@@ -491,17 +422,14 @@ def test_opt_in_worker_queues_claims_and_preserves_unknown_outcome(monkeypatch):
         json={"email": "operator@aml-insight.test", "password": "local-demo-only", "returnSecureToken": True})
     login.raise_for_status()
     headers = {"Authorization": "Bearer " + login.json()["idToken"]}
-    case = next(case for case in repo.publication()["public_cases"] if len(case["alerts"]) == 1)
     alert_id = case["alerts"][0]["id"]
     daily = repo.daily_control()
     reserved_before = daily["attempts_reserved"]
     repo.update_daily_control(DailyControlRequest(expected_revision=daily["revision"], live_enabled=True, limit=12), "operator-demo")
     with TestClient(create_app(settings)) as client:
-        queued = client.post("/api/operator/triage-jobs", headers=headers, json={"alert_ids": [alert_id]})
-        assert queued.status_code == 200 and queued.json()["state"] == "QUEUED"
-        assert queued.json()["attempts"] == [] and calls == []
-        parent_id = queued.json()["id"]
-        assert client.post("/api/operator/triage-jobs", headers=headers, json={"alert_ids": [alert_id]}).json()["id"] == parent_id
+        parent_id, created = repo.enqueue_triage([alert_id], "operator-demo", expected_auto_label_policy_version="auto-label-v1")
+        assert created and repo.run_detail(parent_id)["attempts"] == [] and calls == []
+        assert repo.enqueue_triage([alert_id], "operator-demo", expected_auto_label_policy_version="auto-label-v1")[0] == parent_id
         with ThreadPoolExecutor(max_workers=2) as pool:
             claims = list(pool.map(lambda _: repo.claim_batch(parent_id), range(2)))
         assert claims.count(True) == 1 and claims.count(False) == 1
@@ -544,9 +472,8 @@ def test_leased_runner_seals_closed_multi_alert_work_without_transport():
     from backend.config import Settings
     from backend.worker import execute_delivery
     from backend.repository import Repository
-    repo = Repository(Settings.load())
-    case = next(item for item in repo.publication()["public_cases"] if len(item["alerts"]) > 1)
-    parent_id, created = repo.enqueue_triage([item["id"] for item in case["alerts"]], "closed-delivery-fixture")
+    repo, case = _corpus_case_repo(Settings.load(), multi=True)
+    parent_id, created = repo.enqueue_triage([item["id"] for item in case["alerts"]], "closed-delivery-fixture", expected_auto_label_policy_version="auto-label-v1")
     assert created
     task = repo.prepare_dispatch(parent_id)
     lease = repo.claim_delivery(parent_id, task["generation"], "closed-multi-owner")["lease"]
@@ -735,7 +662,7 @@ def test_known_transient_retry_has_distinct_reservation_and_stops_on_unknown(mon
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-never-sent")
     settings = replace(Settings.load(), local_gemini_enabled=True, local_gemini_free_verified=True,
         local_gemini_verified_until=now() + timedelta(minutes=5))
-    repo = Repository(settings)
+    repo, case = _corpus_case_repo(settings)
     calls = []
     class FaultClient:
         def __enter__(self): return self
@@ -753,8 +680,7 @@ def test_known_transient_retry_has_distinct_reservation_and_stops_on_unknown(mon
     daily = repo.daily_control()
     before = daily["attempts_reserved"]
     repo.update_daily_control(DailyControlRequest(expected_revision=daily["revision"], live_enabled=True, limit=12), "operator-demo")
-    case = next(item for item in repo.publication()["public_cases"] if len(item["alerts"]) == 1)
-    run_id, created = repo.enqueue_triage([item["id"] for item in case["alerts"]], "retry-fault-fixture")
+    run_id, created = repo.enqueue_triage([item["id"] for item in case["alerts"]], "retry-fault-fixture", expected_auto_label_policy_version="auto-label-v1")
     assert created and worker_once(repo) == 1
     detail = repo.run_detail(run_id)
     child_id = detail["children"][0]["id"]
@@ -786,9 +712,8 @@ def test_authenticated_http_delivery_runs_real_subprocess_once(monkeypatch):
     from backend.repository import Repository, now
     from backend.worker import create_app
 
-    repo = Repository(Settings.load())
-    case = next(item for item in repo.publication()["public_cases"] if len(item["alerts"]) > 1)
-    run_id, created = repo.enqueue_triage([item["id"] for item in case["alerts"]], "http-delivery-fixture")
+    repo, case = _corpus_case_repo(Settings.load(), multi=True)
+    run_id, created = repo.enqueue_triage([item["id"] for item in case["alerts"]], "http-delivery-fixture", expected_auto_label_policy_version="auto-label-v1")
     assert created
     task = repo.prepare_dispatch(run_id)
     repo.record_dispatch(run_id, task["generation"], "FAILED")
@@ -840,7 +765,7 @@ def test_cloud_worker_pins_configuration_and_seals_fault_without_cloud_access(mo
     from backend.jobs import run_delivery
     from backend.models import DailyControlRequest
     from backend.repository import Repository, now
-    repo = Repository(Settings.load())  # Construct only the real loopback demo client.
+    repo, case = _corpus_case_repo(Settings.load(), multi=False)  # Construct only the real loopback demo client.
     repo.settings = replace(repo.settings, mode="cloud", project_id="unit-project", live_ai=True, credits_verified=True,
         credit_verified_until=now() + timedelta(minutes=5), verified_cloud_model_id=repo.settings.model_id,
         verified_cloud_location="global", deployed_code_fingerprint="a" * 64)
@@ -860,8 +785,7 @@ def test_cloud_worker_pins_configuration_and_seals_fault_without_cloud_access(mo
     daily = repo.daily_control()
     before = daily["attempts_reserved"]
     repo.update_daily_control(DailyControlRequest(expected_revision=daily["revision"], live_enabled=True, limit=12), "operator-demo")
-    case = next(item for item in repo.publication()["public_cases"] if len(item["alerts"]) == 1)
-    run_id, created = repo.enqueue_triage([item["id"] for item in case["alerts"]], "cloud-fault-fixture")
+    run_id, created = repo.enqueue_triage([item["id"] for item in case["alerts"]], "cloud-fault-fixture", expected_auto_label_policy_version="auto-label-v1")
     assert created
     parent = repo.get("pipeline_runs", run_id)
     bundle = repo.get("config_versions", parent["config_bundle_id"])
